@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime
 from typing import List, Dict
 from ..database import get_database
-from ..utils.jwt_handler import get_current_user
+from ..utils.jwt_handler import get_current_user, resolve_user_id
 from ..services.reward_engine import reward_engine
 
 
@@ -42,6 +42,8 @@ async def save_progress(
             "airflow_score": evaluation_data.get("airflow_score", 0),
             "stars_earned": stars,
             "feedback": evaluation_data.get("feedback", ""),
+            "syllable_scores": evaluation_data.get("syllable_scores", []),
+            "weakest_syllable": evaluation_data.get("weakest_syllable"),
             "duration_ms": evaluation_data.get("duration_ms", 0),
             "created_at": datetime.utcnow()
         }
@@ -113,11 +115,10 @@ async def get_user_progress(
 ):
     """Get all progress for a user."""
     db = get_database()
-    
-    # Verify user can access this data
-    if str(current_user["_id"]) != user_id and current_user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Access denied")
-    
+
+    # Resolve "me"/email/_id to the real user id (frontend may not hold _id)
+    user_id = resolve_user_id(current_user, user_id)
+
     # Get all progress documents
     progress_docs = await db.progress.find({"user_id": user_id}).to_list(length=100)
     
@@ -147,11 +148,10 @@ async def get_progress_summary(
 ):
     """Get aggregated progress summary for a user."""
     db = get_database()
-    
-    # Verify access
-    if str(current_user["_id"]) != user_id and current_user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Access denied")
-    
+
+    # Resolve "me"/email/_id to the real user id (frontend may not hold _id)
+    user_id = resolve_user_id(current_user, user_id)
+
     # Get user data
     user = await db.users.find_one({"_id": current_user["_id"]})
     

@@ -241,19 +241,5 @@ async def export_csv(current_admin: dict = Depends(require_admin)):
     )
 
 
-@router.post("/contact")
-async def save_contact(contact_data: dict):
-    """Save contact form submission."""
-    db = get_database()
-    
-    contact_doc = {
-        "name": contact_data.get("name"),
-        "email": contact_data.get("email"),
-        "message": contact_data.get("message"),
-        "created_at": datetime.utcnow(),
-        "read": False
-    }
-    
-    await db.contacts.insert_one(contact_doc)
-    
-    return {"message": "Contact form submitted successfully"}
+# Contact submissions are handled by the dedicated contact router
+# (app/routers/contact.py), which includes validation and admin read access.

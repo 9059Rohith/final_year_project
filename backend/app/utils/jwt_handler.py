@@ -65,11 +65,36 @@ async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] =
     return user
 
 
+def resolve_user_id(current_user: dict, requested: str) -> str:
+    """Resolve the target user's _id string from a path param.
+
+    The frontend doesn't always hold the Mongo _id, so accept "me", the user's
+    email, or their _id and map them to the authenticated user's _id. Admins may
+    request any user's _id directly. Anything else is denied.
+    """
+    me = str(current_user["_id"])
+    if requested in ("me", me) or requested == current_user.get("email"):
+        return me
+    if current_user.get("role") == "admin":
+        return requested
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+
 async def require_admin(current_user: dict = Depends(get_current_user)):
     """Require admin role."""
     if current_user.get("role") != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"
+        )
+    return current_user
+
+
+async def require_therapist(current_user: dict = Depends(get_current_user)):
+    """Require therapist (or admin) role."""
+    if current_user.get("role") not in ("therapist", "admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Therapist access required"
         )
     return current_user

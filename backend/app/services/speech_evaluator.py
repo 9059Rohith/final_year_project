@@ -12,9 +12,10 @@ try:
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
-    print("⚠️ Transformers not available. Install with: pip install transformers torch")
+    print("[WARNING] Transformers not available. Install with: pip install transformers torch")
 
 from ..utils.audio_utils import extract_mfcc, calculate_airflow_score, calculate_audio_similarity
+from . import advanced_speech
 
 
 class SpeechEvaluator:
@@ -110,7 +111,7 @@ class SpeechEvaluator:
             # Phoneme recognition using Wav2Vec2
             phoneme_match = False
             transcription = ""
-            
+
             if self.model and self.processor:
                 try:
                     transcription = self._transcribe_audio(audio_bytes)
@@ -124,27 +125,56 @@ class SpeechEvaluator:
                 # Fallback: use MFCC score as proxy
                 phoneme_match = mfcc_score > 65
                 print(f"ℹ️ Using MFCC-based phoneme matching: {phoneme_match}")
-            
-            # Calculate overall accuracy
-            accuracy = self._calculate_accuracy(mfcc_score, airflow_score, phoneme_match)
+
+            # Real syllable-level GOP via VTLN + DTW forced alignment over the
+            # Wav2Vec2 CTC posteriorgram. Reference-free; None if model absent.
+            gop_result = None
+            if self.model and self.processor:
+                try:
+                    audio_np = self._load_audio_array(audio_bytes)
+                    gop_result = advanced_speech.syllable_gop(
+                        audio_np, target_phoneme, self.model, self.processor
+                    )
+                    if gop_result:
+                        print(f"🧩 GOP: {gop_result['overall_gop']:.2f} "
+                              f"weakest='{gop_result['weakest_syllable']}' "
+                              f"{gop_result['syllables']}")
+                except Exception as e:
+                    print(f"⚠️ GOP computation error: {e}")
+                    gop_result = None
+
+            # gop_score is the real GOP (0-100) when available, else the MFCC proxy
+            if gop_result:
+                gop_score = gop_result["overall_gop"] * 100.0
+            else:
+                gop_score = mfcc_score * 0.9
+
+            # Calculate overall accuracy (GOP, when present, is the strongest signal)
+            accuracy = self._calculate_accuracy(
+                mfcc_score, airflow_score, phoneme_match,
+                gop_score=gop_result["overall_gop"] * 100.0 if gop_result else None,
+            )
             print(f"🎯 Final Accuracy: {accuracy:.2f}%")
-            
-            # Generate feedback
+
+            # Generate feedback (syllable-aware when GOP is available)
             feedback = self._generate_feedback(
                 target_phoneme,
                 accuracy,
                 phoneme_match,
-                airflow_score
+                airflow_score,
+                gop_result=gop_result,
             )
-            
+
             result = {
                 "accuracy": round(accuracy, 2),
                 "phoneme_match": phoneme_match,
                 "mfcc_score": round(mfcc_score, 2),
-                "gop_score": round(mfcc_score * 0.9, 2),  # Simplified GOP
+                "gop_score": round(gop_score, 2),
                 "airflow_score": round(airflow_score, 2),
                 "feedback": feedback,
-                "transcription": transcription if transcription else "(no speech detected)"
+                "transcription": transcription if transcription else "(no speech detected)",
+                "syllable_scores": gop_result["syllables"] if gop_result else [],
+                "weakest_syllable": gop_result["weakest_syllable"] if gop_result else None,
             }
             
             print(f"✨ Evaluation complete: {result}\n")
@@ -164,6 +194,14 @@ class SpeechEvaluator:
                 "transcription": "(error processing audio)"
             }
     
+    def _load_audio_array(self, audio_bytes: bytes) -> np.ndarray:
+        """Load audio bytes into a normalized, trimmed 16 kHz mono waveform."""
+        audio_io = io.BytesIO(audio_bytes)
+        audio, _ = librosa.load(audio_io, sr=16000, mono=True)
+        audio = audio / (np.max(np.abs(audio)) + 1e-8)
+        audio, _ = librosa.effects.trim(audio, top_db=20)
+        return audio
+
     def _transcribe_audio(self, audio_bytes: bytes) -> str:
         """Transcribe audio using Wav2Vec2 with improved preprocessing."""
         try:
@@ -250,15 +288,24 @@ class SpeechEvaluator:
         self,
         mfcc_score: float,
         airflow_score: float,
-        phoneme_match: bool
+        phoneme_match: bool,
+        gop_score: float = None
     ) -> float:
         """
         Calculate overall accuracy score with improved precision.
-        
+
         Uses a more accurate scoring system for reliable speech evaluation.
-        MFCC score is 0-100, airflow is 0-1.
+        MFCC score is 0-100, airflow is 0-1. When a real GOP score (0-100) is
+        provided it is the most principled signal, so the acoustic base score is
+        a 60/40 blend of GOP and MFCC similarity.
         """
-        # Base score from MFCC similarity (0-100) with improved mapping
+        # Blend in the real GOP when available: it directly measures whether the
+        # intended phones were produced, so weight it heavily over raw spectral
+        # similarity. Falls back to MFCC-only when GOP is unavailable.
+        if gop_score is not None:
+            mfcc_score = 0.6 * gop_score + 0.4 * mfcc_score
+
+        # Base score from acoustic similarity (0-100) with improved mapping
         # More realistic scoring based on actual pronunciation quality
         if mfcc_score >= 85:
             base_score = 90 + (mfcc_score - 85) * 0.67  # 90-100 for excellent
@@ -295,11 +342,28 @@ class SpeechEvaluator:
         target_phoneme: str,
         accuracy: float,
         phoneme_match: bool,
-        airflow_score: float
+        airflow_score: float,
+        gop_result: dict = None
     ) -> str:
         """Generate constructive, child-friendly feedback based on performance."""
         phoneme_lower = target_phoneme.lower()
-        
+
+        # When the GOP pinpoints a weak syllable in a multi-syllable word and the
+        # attempt wasn't already excellent, target that exact syllable.
+        if (
+            gop_result
+            and accuracy < 90
+            and len(gop_result.get("syllables", [])) > 1
+            and gop_result.get("weakest_syllable")
+        ):
+            weak = gop_result["weakest_syllable"]
+            return (
+                f"Good effort! The '{weak}' part of '{target_phoneme}' needs a "
+                f"little more practice. Say it slowly: "
+                f"{'-'.join(s['syllable'] for s in gop_result['syllables'])}, "
+                f"and focus on '{weak}'."
+            )
+
         if accuracy >= 90:
             feedbacks = [
                 f"🎉 Excellent! You pronounced '{target_phoneme}' perfectly!",

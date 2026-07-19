@@ -1,0 +1,176 @@
+\documentclass[10pt,a4paper]{article}
+
+% =========================
+% Packages
+% =========================
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=0.85in]{geometry}
+\usepackage{times}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage{setspace}
+\usepackage{enumitem}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{fancyhdr}
+\usepackage[hidelinks]{hyperref}
+
+% =========================
+% Formatting (Same Template Style)
+% =========================
+\definecolor{amritaMaroon}{HTML}{A4123F}
+\titleformat{\section}{\Large\bfseries\color{amritaMaroon}}{\thesection}{1em}{}
+\titleformat{\subsection}{\large\bfseries}{\thesubsection}{1em}{}
+\titlespacing*{\section}{0pt}{6pt}{2pt}
+\titlespacing*{\subsection}{0pt}{4pt}{1pt}
+\setstretch{1.0}
+\setlist[itemize]{noitemsep,topsep=1pt,leftmargin=5mm}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{Phase 1 Findings Summary}
+\fancyhead[R]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\newcolumntype{L}{>{\raggedright\arraybackslash}X}
+
+\begin{document}
+
+% =========================
+% Cover Block
+% =========================
+\begin{center}
+{\Large\textbf{\textcolor{amritaMaroon}{AMRITA VISHWA VIDYAPEETHAM}}}\\
+{\large\textbf{School of Computing}}\\
+{\large\textbf{Department of Computer Science and Engineering}}\\
+\vspace{0.2cm}
+{\LARGE\textbf{Phase 1 Summary Report}}\\
+\vspace{0.1cm}
+{\large\textbf{Summary of Findings and Completion Status}}\\
+\vspace{0.1cm}
+23CSE399 -- Structured Two-Page Note\\
+\today
+\end{center}
+
+\vspace{0.1cm}
+\hrule
+\vspace{0.08cm}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{|l|p{4.2cm}|p{4cm}|p{2.6cm}|}
+\hline
+\multicolumn{2}{|c|}{\textbf{Team Members}} & \textbf{Guide} & \textbf{Project Type} \\
+\hline
+CB.SC.U4CSE23018 & Rohith Kumar D &
+\multirow{5}{=}{\raggedright \small \textbf{Dr. Venkataraman D} \\ \textit{Associate Professor, Dept. of CSE}} &
+\multirow{5}{=}{\raggedright \small \textbf{Type 1} \\ Research} \\ \cline{1-2}
+CB.SC.U4CSE23055 & T Venkataramana & & \\ \cline{1-2}
+CB.SC.U4CSE23058 & VAB Jashwanth Reddy & & \\ \cline{1-2}
+CB.SC.U4CSE23060 & C Kalyan Kumar Reddy & & \\ \cline{1-2}
+CB.SC.U4CSE23446 & Hemanth Sholingaram & & \\
+\hline
+\end{tabular}
+\end{center}
+
+\section{Executive Summary of Phase 1 Findings}
+\small
+Phase 1 established the research direction, novelty scope, and system ambition for an edge-based AI speech therapy framework focused on children with ASD in regional language settings. The report and panel review highlighted both strengths and corrections needed for realistic deployment.
+
+\subsection{Major Findings}
+\begin{itemize}
+\item \textbf{Strong Foundation:} The project clearly justified clinical need, regional language relevance, and therapist-access constraints.
+\item \textbf{Comprehensive Literature Base:} A broad survey (25 papers) covered pronunciation metrics, multimodal cues, adaptive learning, and privacy frameworks.
+\item \textbf{Core Technical Direction Validated:} Syllable-level scoring, VTLN normalization, and longitudinal tracking were accepted as meaningful.
+\item \textbf{Feasibility Gap Identified:} The original architecture was too heavy for immediate edge deployment due to concurrent high-compute modules.
+\item \textbf{Adaptivity Timing Concern:} RL was considered useful but unsafe for immediate use without sufficient interaction data.
+\end{itemize}
+
+\subsection{Panel-Driven Corrections Adopted}
+\begin{itemize}
+\item Shift from full-stack immediate deployment to staged integration.
+\item Replace computationally expensive privacy approach with practical local-first federated synchronization.
+\item Prioritize deterministic scoring pipeline before advanced adaptive modules.
+\item Improve architecture clarity with explicit edge vs sync boundary.
+\end{itemize}
+
+\begin{table}[htbp]
+\centering
+\caption{Phase 1 Findings to Engineering Decision Mapping}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{|p{4cm}|L|}
+\hline
+\textbf{Phase 1 Finding} & \textbf{Decision Taken for Next Stage} \\
+\hline
+Stack too heavy for edge at once & Introduce phased module rollout \\
+\hline
+Latency claim not realistic under full load & Optimize core pipeline first \\
+\hline
+FHE overhead impractical for target hardware & Use practical federated update flow \\
+\hline
+Immediate RL is data-unsafe & Keep rule-based control before RL \\
+\hline
+Tracking layer over-complex in early stage & Use structured lightweight progress tracking \\
+\hline
+\end{tabularx}
+\end{table}
+
+\vspace{0.1cm}
+
+\section{Completion of Phase 1: Structured Status}
+\subsection{Completed Outcomes}
+\begin{itemize}
+\item Problem definition and research motivation were fully established.
+\item Literature review and cumulative research-gap identification were completed.
+\item Originality claims were framed and defended with comparative justification.
+\item Baseline architecture and module decomposition were documented.
+\item Initial evaluation metrics and expected outcomes were defined.
+\item Dataset strategy and proxy rationale were identified.
+\item Major risks (latency, privacy overhead, RL convergence) were documented.
+\end{itemize}
+
+\subsection{What Phase 1 Did Not Finalize (By Design)}
+\begin{itemize}
+\item End-to-end edge deployment benchmarking was not fully finalized.
+\item RL policy deployment was intentionally deferred pending data readiness.
+\item Primary target-population corpus collection remains a planned controlled phase.
+\item Clinical pilot validation was scoped, not completed, in Phase 1.
+\end{itemize}
+
+\subsection{Completion Matrix}
+\begin{table}[htbp]
+\centering
+\renewcommand{\arraystretch}{1.12}
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabularx}{\textwidth}{|p{5.1cm}|p{2.2cm}|L|}
+\hline
+\textbf{Phase 1 Component} & \textbf{Status} & \textbf{Remarks} \\
+\hline
+Problem formulation and objective framing & Completed & Clear and clinically motivated \\
+\hline
+Literature survey and gap synthesis & Completed & Sufficient for Phase 2 transition \\
+\hline
+Architecture and novelty articulation & Completed with revisions & Feasibility refinements incorporated \\
+\hline
+Core metric definition (GOP/VSA/latency intent) & Completed & Ready for Phase 2 validation \\
+\hline
+Full deployment and pilot evidence & Pending next phase & Correctly deferred to avoid premature claims \\
+\hline
+\end{tabularx}
+\end{table}
+
+\enlargethispage{3\baselineskip}
+
+\subsection{Final Phase 1 Completion Statement}
+Phase 1 is considered \textbf{successfully completed} as a research-definition and feasibility-discovery stage. It delivered a validated problem statement, strong technical foundation, and precise correction map for Phase 2 execution. The transition quality is high because critical constraints were identified early and translated into actionable engineering decisions.
+
+\begin{center}
+\footnotesize \textbf{End of Two-Page Summary}
+\end{center}
+
+\end{document}

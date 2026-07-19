@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTherapyStore } from '../../store/therapyStore'
 import { progressAPI } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
+import { useSettingsStore } from '../../store/settingsStore'
 import toast from 'react-hot-toast'
 
 const motivationalMessages = [
@@ -23,6 +24,7 @@ export default function Slide5_Rewards({ lesson }) {
   const navigate = useNavigate()
   const { sessionResults, resetSession } = useTherapyStore()
   const { user, updateUserStats } = useAuthStore()
+  const { soundEnabled } = useSettingsStore()
   const [saved, setSaved] = useState(false)
   
   // Get latest result
@@ -40,17 +42,19 @@ export default function Slide5_Rewards({ lesson }) {
   const message = stars >= 2 ? motivationalMessages[Math.floor(Math.random() * motivationalMessages.length)] : "Keep practicing! You're learning! 💪"
   
   useEffect(() => {
-    // Play sounds
-    if (stars >= 2) {
+    // Play sounds (respecting the user's sound preference)
+    if (soundEnabled && stars >= 2) {
       new Howl({ src: ['/assets/sounds/applause.mp3'] }).play()
     }
-    
+
     // Play star collect sound for each star
-    stars && [...Array(stars)].forEach((_, i) => {
-      setTimeout(() => {
-        new Howl({ src: ['/assets/sounds/star_collect.mp3'] }).play()
-      }, 500 + i * 300)
-    })
+    if (soundEnabled && stars) {
+      [...Array(stars)].forEach((_, i) => {
+        setTimeout(() => {
+          new Howl({ src: ['/assets/sounds/star_collect.mp3'] }).play()
+        }, 500 + i * 300)
+      })
+    }
     
     // Save progress
     if (!saved && latestResult.accuracy > 0) {

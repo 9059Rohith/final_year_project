@@ -2,11 +2,14 @@ import { useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Volume2 } from 'lucide-react'
 import { Howl } from 'howler'
+import { useSettingsStore } from '../../store/settingsStore'
 
 export default function Slide1_Picture({ lesson, onNext }) {
+  const { autoPlay, soundEnabled } = useSettingsStore()
+
   useEffect(() => {
-    // Auto-play audio on mount
-    if (lesson.audio) {
+    // Auto-play audio on mount, if the user hasn't disabled it
+    if (lesson.audio && autoPlay && soundEnabled) {
       playAudio()
     }
   }, [])

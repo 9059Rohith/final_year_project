@@ -1,224 +1,175 @@
 import { useQuery } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { LogOut, Star, Target, TrendingUp, Award } from 'lucide-react'
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts'
+import { Star, Target, TrendingUp, Award, Home, Zap, Calendar } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
-import { progressAPI, authAPI } from '../services/api'
-import toast from 'react-hot-toast'
+import { progressAPI } from '../services/api'
+import DashboardLayout from '../components/layout/DashboardLayout'
+import { Card, StatCard, SectionTitle } from '../components/ui'
 
 export default function UserDashboard() {
   const navigate = useNavigate()
-  const { user, logout } = useAuthStore()
-  
+  const { user } = useAuthStore()
+
   const { data: summary } = useQuery({
     queryKey: ['progress-summary', user?.email],
-    queryFn: () => progressAPI.getProgressSummary(user?.email)
+    queryFn: () => progressAPI.getProgressSummary(user?.email),
+    enabled: !!user?.email,
   })
-  
-  const handleLogout = async () => {
-    try {
-      await authAPI.logout()
-      logout()
-      navigate('/')
-      toast.success('Logged out successfully')
-    } catch (error) {
-      console.error('Logout error:', error)
-    }
-  }
-  
+
   const lessons = [
-    { id: 1, symbol: 'அ', english: 'A', type: 'letter', difficulty: 1 },
-    { id: 2, symbol: 'ஆ', english: 'AA', type: 'letter', difficulty: 1 },
-    { id: 3, symbol: 'ல', english: 'LA', type: 'letter', difficulty: 2 },
-    { id: 4, symbol: 'த', english: 'TA', type: 'letter', difficulty: 2 },
-    { id: 5, symbol: 'அம்மா', english: 'AMMA', type: 'word', difficulty: 3 },
-    { id: 6, symbol: 'அப்பா', english: 'APPA', type: 'word', difficulty: 3 },
+    { id: 1, symbol: 'அ', english: 'A', type: 'letter', difficulty: 1, color: 'from-blue-500 to-indigo-600' },
+    { id: 2, symbol: 'ஆ', english: 'AA', type: 'letter', difficulty: 1, color: 'from-purple-500 to-violet-600' },
+    { id: 3, symbol: 'ல', english: 'LA', type: 'letter', difficulty: 2, color: 'from-emerald-500 to-teal-600' },
+    { id: 4, symbol: 'த', english: 'TA', type: 'letter', difficulty: 2, color: 'from-orange-500 to-red-600' },
+    { id: 5, symbol: 'அம்மா', english: 'AMMA', type: 'word', difficulty: 3, color: 'from-pink-500 to-rose-600' },
+    { id: 6, symbol: 'அப்பா', english: 'APPA', type: 'word', difficulty: 3, color: 'from-cyan-500 to-blue-600' },
   ]
-  
+
   const getLessonStatus = (lessonId) => {
-    // All lessons are unlocked - users can access any lesson
-    const progress = summary?.data?.progress_by_lesson?.find(p => p.lesson_id === lessonId)
+    const progress = summary?.data?.progress_by_lesson?.find((p) => p.lesson_id === lessonId)
     if (progress?.completed) return 'completed'
     if (progress?.attempts > 0) return 'in-progress'
     return 'unlocked'
   }
-  
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Sidebar */}
-      <div className="fixed left-0 top-0 bottom-0 w-64 bg-white shadow-xl p-6 flex flex-col">
-        <div className="mb-8">
-          <div className="w-16 h-16 bg-gradient-to-br from-primary to-secondary rounded-full flex items-center justify-center text-white font-bold text-2xl mx-auto mb-4 shadow-lg">
-            {user?.child_name?.charAt(0) || 'U'}
-          </div>
-          <h3 className="text-center font-bold text-lg">{user?.child_name}</h3>
-          <p className="text-center text-sm text-gray-600">{user?.full_name}</p>
-        </div>
-        
-        <nav className="flex-1 space-y-2">
-          <button className="w-full text-left px-4 py-3 rounded-xl bg-gradient-to-r from-primary to-secondary text-white font-semibold shadow-md">
-            Dashboard
-          </button>
-          <button 
-            onClick={() => navigate('/progress')}
-            className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-100 transition"
-          >
-            Progress
-          </button>
-          <button 
-            onClick={() => navigate('/settings')}
-            className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-100 transition"
-          >
-            Settings
-          </button>
-        </nav>
-        
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition"
-        >
-          <LogOut className="w-5 h-5" />
-          <span>Logout</span>
-        </button>
-      </div>
-      
-      {/* Main content */}
-      <div className="ml-64 p-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">Welcome back, {user?.child_name}! 👋</h1>
-          <p className="text-gray-600 mb-8">Let's continue your speech therapy journey</p>
-          
-          {/* Stats cards */}
-          <div className="grid grid-cols-4 gap-6 mb-8">
-            <StatsCard
-              icon={<Star className="w-8 h-8 text-white" />}
-              title="Total Stars"
-              value={user?.total_stars || 0}
-              color="from-yellow-400 to-yellow-600"
-            />
-            <StatsCard
-              icon={<Target className="w-8 h-8 text-white" />}
-              title="Sessions"
-              value={user?.total_sessions || 0}
-              color="from-secondary to-secondary-dark"
-            />
-            <StatsCard
-              icon={<TrendingUp className="w-8 h-8 text-white" />}
-              title="Avg Accuracy"
-              value={`${Math.round(summary?.data?.avg_accuracy || 0)}%`}
-              color="from-primary to-primary-dark"
-            />
-            <StatsCard
-              icon={<Award className="w-8 h-8 text-white" />}
-              title="Completed"
-              value={`${summary?.data?.completed_lessons || 0}/6`}
-              color="from-accent to-accent-dark"
-            />
-          </div>
-          
-          {/* Progress chart */}
-          {summary?.data?.chart_data && summary.data.chart_data.length > 0 && (
-            <div className="bg-white rounded-3xl shadow-lg p-8 mb-8">
-              <h2 className="text-2xl font-bold mb-6">Progress Over Time</h2>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={summary.data.chart_data}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="accuracy" stroke="#2563EB" strokeWidth={3} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-          
-          {/* Lesson grid */}
-          <div className="bg-white rounded-3xl shadow-lg p-8">
-            <h2 className="text-2xl font-bold mb-6">Lessons</h2>
-            <div className="grid grid-cols-3 gap-6">
-              {lessons.map((lesson) => {
-                const status = getLessonStatus(lesson.id)
-                const progress = summary?.data?.progress_by_lesson?.find(p => p.lesson_id === lesson.id)
-                
-                return (
-                  <motion.div
-                    key={lesson.id}
-                    whileHover={status !== 'locked' ? { scale: 1.05 } : {}}
-                    className={`p-6 rounded-2xl border-2 cursor-pointer transition ${
-                      status === 'completed' ? 'border-green-500 bg-green-50' :
-                      status === 'in-progress' ? 'border-primary bg-primary/5' :
-                      status === 'unlocked' ? 'border-gray-300 bg-white hover:border-primary' :
-                      'border-gray-300 bg-gray-50 opacity-50'
-                    }`}
-                    onClick={() => status !== 'locked' && navigate(`/therapy/${lesson.id}`)}
-                  >
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="text-4xl tamil-letter font-bold">{lesson.symbol}</div>
-                      {status === 'completed' && <span className="text-2xl">✅</span>}
-                      {status === 'unlocked' && <span className="text-2xl">🎯</span>}
-                      {status === 'locked' && <span className="text-2xl">🔒</span>}
-                    </div>
-                    
-                    <div className="text-xl font-bold mb-2">{lesson.english}</div>
-                    <div className="text-sm text-gray-600 mb-2 capitalize">{lesson.type}</div>
-                    
-                    <div className="flex space-x-1 mb-3">
-                      {[...Array(lesson.difficulty)].map((_, i) => (
-                        <span key={i} className="text-accent">⭐</span>
-                      ))}
-                    </div>
-                    
-                    {progress && (
-                      <div className="text-sm">
-                        <div className="text-gray-600">Best: {Math.round(progress.best_accuracy)}%</div>
-                        <div className="text-gray-600">Stars: {progress.stars_best} ⭐</div>
-                      </div>
-                    )}
-                    
-                    {(status === 'in-progress' || status === 'unlocked') && (
-                      <button className="w-full mt-4 py-2 bg-gradient-to-r from-primary to-secondary text-white rounded-xl hover:from-primary-dark hover:to-secondary-dark transition font-semibold shadow-md">
-                        {status === 'in-progress' ? 'Continue' : 'Start'}
-                      </button>
-                    )}
-                  </motion.div>
-                )
-              })}
-            </div>
-          </div>
-          
-          {/* Motivational quote */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            className="mt-8 bg-gradient-to-r from-primary to-secondary text-white rounded-3xl p-8 text-center shadow-xl"
-          >
-            <p className="text-2xl font-bold mb-2">
-              "Every voice matters. Every sound is progress." 🌟
-            </p>
-            <p className="text-white/80">Keep practicing every day!</p>
-          </motion.div>
-        </motion.div>
-      </div>
-    </div>
-  )
-}
 
-function StatsCard({ icon, title, value, color }) {
+  const quotes = [
+    'Every voice matters. Every sound is progress.',
+    'Small steps lead to big achievements.',
+    'Practice makes progress, not perfection.',
+    "Your child's voice is a gift to the world.",
+  ]
+  const todayQuote = quotes[new Date().getDay() % quotes.length]
+
   return (
-    <motion.div
-      whileHover={{ y: -5 }}
-      className="bg-white rounded-2xl shadow-lg p-6 border border-neutral-100"
+    <DashboardLayout
+      title={`Welcome back, ${user?.child_name || 'friend'}!`}
+      subtitle="Let's continue your speech therapy journey today"
+      icon={Home}
+      actions={
+        <div className="flex items-center gap-2 bg-white/15 backdrop-blur px-4 py-2 rounded-full text-white text-sm font-medium">
+          <Calendar className="w-4 h-4" />
+          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+        </div>
+      }
     >
-      <div className={`w-14 h-14 bg-gradient-to-br ${color} rounded-xl flex items-center justify-center mb-4 shadow-md`}>
-        {icon}
+      {/* Stats */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+        <StatCard icon={Star} title="Total Stars" value={user?.total_stars || 0} color="gold" delay={0} />
+        <StatCard icon={Target} title="Sessions" value={user?.total_sessions || 0} color="secondary" delay={0.1} />
+        <StatCard icon={TrendingUp} title="Avg Accuracy" value={`${Math.round(summary?.data?.avg_accuracy || 0)}%`} color="primary" delay={0.2} />
+        <StatCard icon={Award} title="Completed" value={`${summary?.data?.completed_lessons || 0}/6`} color="accent" delay={0.3} />
       </div>
-      <div className="text-3xl font-bold text-neutral-800 mb-1">{value}</div>
-      <div className="text-sm text-neutral-600">{title}</div>
-    </motion.div>
+
+      {/* Progress chart */}
+      {summary?.data?.chart_data?.length > 0 && (
+        <Card delay={0.3} className="p-8 mb-8">
+          <SectionTitle title="Progress Over Time" subtitle="Your accuracy across recent sessions" icon={TrendingUp} />
+          <ResponsiveContainer width="100%" height={280}>
+            <AreaChart data={summary.data.chart_data}>
+              <defs>
+                <linearGradient id="colorAccuracy" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.15} />
+                  <stop offset="95%" stopColor="#4F46E5" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e5e5" strokeOpacity={0.4} />
+              <XAxis dataKey="date" stroke="#a3a3a3" fontSize={12} />
+              <YAxis stroke="#a3a3a3" fontSize={12} />
+              <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }} />
+              <Area type="monotone" dataKey="accuracy" stroke="#4F46E5" strokeWidth={3} fill="url(#colorAccuracy)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </Card>
+      )}
+
+      {/* Lessons */}
+      <Card delay={0.4} className="p-8 mb-8">
+        <SectionTitle
+          title="Your Lessons"
+          icon={Star}
+          action={<span className="text-sm text-neutral-500 dark:text-neutral-400">{summary?.data?.completed_lessons || 0} of 6 completed</span>}
+        />
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {lessons.map((lesson, i) => {
+            const status = getLessonStatus(lesson.id)
+            const progress = summary?.data?.progress_by_lesson?.find((p) => p.lesson_id === lesson.id)
+            return (
+              <motion.div
+                key={lesson.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 + i * 0.08 }}
+                whileHover={{ y: -4, scale: 1.02 }}
+                className={`relative rounded-2xl p-6 border-2 cursor-pointer transition-all duration-300 overflow-hidden ${
+                  status === 'completed'
+                    ? 'border-accent-300 bg-accent-50/50 dark:border-accent-700 dark:bg-accent-900/20'
+                    : status === 'in-progress'
+                    ? 'border-primary-300 bg-primary-50/50 dark:border-primary-700 dark:bg-primary-900/20'
+                    : 'border-neutral-200 bg-white hover:border-primary-200 dark:border-neutral-700 dark:bg-neutral-800'
+                }`}
+                onClick={() => navigate(`/therapy/${lesson.id}`)}
+              >
+                <div className="absolute top-3 right-3">
+                  {status === 'completed' && <span className="text-lg">✅</span>}
+                  {status === 'in-progress' && (
+                    <span className="flex items-center gap-1 text-xs font-semibold text-primary-600 bg-primary-100 px-2 py-1 rounded-full">
+                      <Zap className="w-3 h-3" />In Progress
+                    </span>
+                  )}
+                  {status === 'unlocked' && <span className="text-lg">🎯</span>}
+                </div>
+
+                <div className={`tamil-letter text-4xl font-bold bg-gradient-to-br ${lesson.color} bg-clip-text text-transparent mb-3`}>
+                  {lesson.symbol}
+                </div>
+
+                <div className="text-xl font-bold text-neutral-900 dark:text-white mb-1">{lesson.english}</div>
+                <div className="text-xs text-neutral-500 dark:text-neutral-400 capitalize mb-3">{lesson.type} • Difficulty {lesson.difficulty}</div>
+
+                <div className="flex gap-0.5 mb-4">
+                  {[...Array(3)].map((_, j) => (
+                    <Star key={j} className={`w-4 h-4 ${j < lesson.difficulty ? 'text-gold-400 fill-gold-400' : 'text-neutral-200 dark:text-neutral-700'}`} />
+                  ))}
+                </div>
+
+                {progress && (
+                  <div className="flex items-center gap-3 text-xs mb-4">
+                    <span className="text-neutral-500 dark:text-neutral-400">Best: <span className="font-bold text-primary-600">{Math.round(progress.best_accuracy)}%</span></span>
+                    <span className="text-neutral-500 dark:text-neutral-400">Stars: <span className="font-bold text-gold-600">{progress.stars_best}⭐</span></span>
+                  </div>
+                )}
+
+                <button
+                  className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-all ${
+                    status === 'completed'
+                      ? 'bg-accent-100 text-accent-700 hover:bg-accent-200'
+                      : 'bg-gradient-to-r from-primary-500 to-secondary-500 text-white shadow-md hover:shadow-lg'
+                  }`}
+                >
+                  {status === 'completed' ? 'Review' : status === 'in-progress' ? 'Continue' : 'Start Lesson'}
+                </button>
+              </motion.div>
+            )
+          })}
+        </div>
+      </Card>
+
+      {/* Quote */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.6 }}
+        className="bg-gradient-to-r from-primary-600 via-primary-700 to-secondary-700 text-white rounded-3xl p-8 text-center shadow-xl relative overflow-hidden"
+      >
+        <div className="absolute inset-0 bg-grid opacity-5" />
+        <div className="relative z-10">
+          <div className="text-5xl mb-4">💫</div>
+          <p className="text-2xl font-bold mb-2">"{todayQuote}"</p>
+          <p className="text-white/60 text-sm">Daily Motivation — Keep practicing every day!</p>
+        </div>
+      </motion.div>
+    </DashboardLayout>
   )
 }

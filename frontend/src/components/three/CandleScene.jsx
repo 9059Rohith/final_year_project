@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
@@ -118,8 +118,8 @@ function Candle({ airflowScore, onExtinguish }) {
 }
 
 export default function CandleScene({ airflowScore, word }) {
-  const [extinguished, setExtinguished] = React.useState(false)
-  const [showSuccess, setShowSuccess] = React.useState(false)
+  const [extinguished, setExtinguished] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
   
   const handleExtinguish = () => {
     if (word === 'appa' && !extinguished) {

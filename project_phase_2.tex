@@ -25,6 +25,9 @@
 
 \begin{document}
 
+% ============================================================
+% TITLE SLIDE
+% ============================================================
 \begin{frame}
     \begin{tikzpicture}[remember picture,overlay]
         \node[fill=amritaMaroon, text=white, font=\bfseries\footnotesize,
@@ -34,10 +37,11 @@
     \end{tikzpicture}
 
     \centering
+    % Placeholder for university logo
     \includegraphics[width=2.5cm, height=2.5cm, keepaspectratio]{logo.png} 
     \vspace{0.3cm}
 
-    {\Large \textbf{\textcolor{amritaMaroon}{Edge-Based AI System for Adaptive Regional Speech Enhancement for Children with Autism}}} \\
+    {\Large \textbf{\textcolor{amritaMaroon}{Edge-Based AI System for Adaptive Regional Speech Enhancement in Autism Children}}} \\
     \vspace{0.2cm}
     {\normalsize \textbf{Team Number: 96}} \\
     \vspace{0.4cm}
@@ -69,13 +73,90 @@
     \vspace{0.04cm}
     {\footnotesize \today}
 \end{frame}
+
+%============================================================
+% SLIDE 1: RETROSPECTIVE OF PANEL 1
+% ============================================================
+\begin{frame}{Retrospective: Panel 1 Proposal Overview}
+    \vspace{-3mm}
+    \begin{block}{Initial System Architecture (Panel 1)}
+        \scriptsize
+        For our initial defense, we proposed a highly ambitious, multimodal edge Al system for ASD speech therapy in rural South India. The core components included:
+        \begin{itemize}
+            \item \textbf{Multimodal Real-Time Processing:} Simultaneous processing of acoustic features (Wav2Vec 2.0) and visual stress markers (MediaPipe facial landmarks).
+            \item \textbf{Advanced Scaffolding:} Immediate Day-1 deployment of a Deep Deterministic Policy Gradient (DDPG) reinforcement learning agent for continuous difficulty adjustment.
+            \item \textbf{Privacy Engine:} Utilizing Fully Homomorphic Encryption (FHE) to secure federated weight aggregation across devices.
+            \item \textbf{Longitudinal Tracking:} A Semantic Knowledge Graph (OWL/RDF triples) to map phonetic biomarker trajectories (VSA, GOP) over time.
+        \end{itemize}
+    \end{block}
+
+    \vspace{2mm}
+    \setbeamercolor{block title}{bg=amritaMaroon, fg=white}
+    \begin{block}{The Engineering Bottleneck}
+        \scriptsize
+        We hypothesized that this entire pipeline could execute on low-power edge devices with an end-to-end inference latency of \textbf{< 200ms}. However, critical panel feedback correctly identified that running FHE, a Transformer model, live video processing, and an RL agent simultaneously on edge hardware was a \textit{technological contradiction}.
+    \end{block}
+\end{frame}
+
+
+% ============================================================
+% SLIDE 2: FEEDBACK AND FIXES FROM PANEL 1
+% ============================================================
+\begin{frame}{Panel 1 Feedback \& Strategic Architectural Revisions}
+    \vspace{-4mm}
+    \begin{columns}[T, totalwidth=\textwidth]
+
+        \begin{column}{0.48\textwidth}
+            \setbeamercolor{block title}{bg=amritaMaroon, fg=white}
+            \begin{block}{1. The Latency \& Hardware Contradiction}
+                \tiny
+                \textbf{Critique:} Claiming <200ms latency while running FHE, DDPG, MediaPipe, and Wav2Vec on the edge is hardware-impossible.\\
+                \textbf{Resolution:} We aggressively stripped overhead through a phased deployment:
+                \begin{itemize}
+                    \item \textbf{FHE Dropped:} Replaced with standard Federated Learning (Flower framework) where raw audio is deleted and only mathematical gradients sync.
+                    \item \textbf{Phased Rollout:} DDPG shifted to Phase 2 (activates after 22,500 episodes via a Rule-Based engine first), and MediaPipe pushed to Phase 3.
+                \end{itemize}
+            \end{block}
+
+            \vspace{0.5mm}
+            \setbeamercolor{block title}{bg=black, fg=white}
+            \begin{block}{2. Knowledge Graph Redundancy}
+                \tiny
+                \textbf{Critique:} An OWL/RDF Knowledge Graph is computationally heavy and redundant for simply tracking scores.\\
+                \textbf{Resolution:} Eliminated the KG. Transitioned to a lightweight, scalable \textbf{MongoDB Aggregation Pipeline} using hierarchical session documents to detect recurring syllable weaknesses automatically.
+            \end{block}
+        \end{column}
+
+        \begin{column}{0.48\textwidth}
+            \setbeamercolor{block title}{bg=black, fg=white}
+            \begin{block}{3. CNN vs. Transformer Placement}
+                \tiny
+                \textbf{Critique:} Why use two models (CNN \& Transformer), and where do they live (Edge vs. Cloud)?\\
+                \textbf{Resolution:} Clarified that they are components of a \textit{single} backbone (Wav2Vec 2.0). CNN layers extract local retroflex bursts, while Transformer layers track long-range prosody. \textbf{The entire quantized model lives strictly on the Edge} to ensure zero cloud latency.
+            \end{block}
+
+            \vspace{0.5mm}
+            \setbeamercolor{block title}{bg=amritaMaroon, fg=white}
+            \begin{block}{4. Architecture Diagram Clarity}
+                \tiny
+                \textbf{Critique:} The previous diagram lacked clear data boundaries and processing flow.\\
+                \textbf{Resolution:} Completely redesigned the architecture mapping (Slide 8) to explicitly define the \textbf{Edge Device Boundary} (all audio processing, local SQLite) vs. the \textbf{Server Boundary} (anonymized payload syncs, federated weight aggregation).
+            \end{block}
+        \end{column}
+
+    \end{columns}
+\end{frame}
+
+%============================================================
+% SLIDE 1: PROBLEM STATEMENT & NEED
+% ============================================================
 \section{Introduction}
 \begin{frame}{Problem Statement \& Need of the System}
     \vspace{-2mm}
     \setbeamercolor{block title}{bg=amritaMaroon, fg=white}
     \begin{block}{\small Problem Statement}
         \small 
-        To develop a privacy-first, edge-based AI speech therapy system for children with Autism Spectrum Disorder (ASD) in rural South India. Current cloud-based tools struggle with Dravidian retroflex consonants and atypical ASD prosody while exposing pediatric privacy risks. The offline system addresses therapist scarcity with syllable-level feedback and on-device tracking.
+        To develop a privacy-first, edge-based AI speech therapy system for children with Autism Spectrum Disorder (ASD) in rural South India. Existing cloud-based AI tools fail on Dravidian retroflex consonants and atypical ASD prosody, while risking pediatric privacy. The proposed offline system addresses the critical shortage of therapists by providing precise, syllable-level pronunciation feedback and tracking longitudinal progress securely on-device.
     \end{block}
 
     \vspace{2mm}
@@ -85,29 +166,36 @@
         \footnotesize
         \begin{itemize}
             \setlength{\itemsep}{4pt}
-            \item \textbf{Addressing Therapist Scarcity:} With fewer than one therapist per 10,000 children in rural Tamil Nadu, one remote therapist can monitor 20--30 children.
-            \item \textbf{Clinical Precision (Syllable-Level):} Replaces binary whole-word scoring with syllable-boundary evaluation.
-            \item \textbf{Privacy \& Data Sovereignty:} Processing and deleting raw audio on-device keeps pediatric voice data local.
-            \item \textbf{Objective Progress Tracking:} Replaces subjective observation with VSA and GOP metrics.
+            \item \textbf{Addressing the Therapist Scarcity:} With fewer than 1 therapist per 10,000 children in rural Tamil Nadu, this system empowers a single remote therapist to effectively monitor 20-30 children.
+            \item \textbf{Clinical Precision (Syllable-Level):} Replaces binary whole-word scoring by evaluating exact syllable boundaries, telling therapists exactly where the articulation is failing.
+            \item \textbf{Privacy \& Data Sovereignty:} Pediatric biometric voice data is highly sensitive. Processing and deleting raw audio entirely on-device ensures no data ever leaves the child's home.
+            \item \textbf{Objective Progress Tracking:} Replaces subjective clinical observations with repeatable, data-driven acoustic metrics (VSA and GOP).
         \end{itemize}
     \end{block}
 \end{frame}
+
+% ============================================================
+% SLIDE 2: RESEARCH OBJECTIVES
+% ============================================================
 \begin{frame}{Project Objectives}
     \setbeamercolor{block title}{bg=amritaMaroon, fg=white}
     \begin{block}{Core Technical \& Clinical Objectives}
         \small
         \begin{itemize}
             \setlength{\itemsep}{6pt}
-            \item \textbf{Edge Computing Pipeline:} Develop an offline AI pipeline that processes speech on-device.
-            \item \textbf{Transfer Learning for Dataset Scarcity:} Adapt Wav2Vec 2.0 through two-stage transfer learning for Tamil phonetics and pediatric disordered speech.
-            \item \textbf{Acoustic Space Normalization:} Implement VTLN so children are not penalized for physiology.
-            \item \textbf{Syllable-Level GOP Scoring:} Use GOP to identify mispronounced syllables.
-            \item \textbf{Longitudinal Metric Tracking:} Track VSA and GOP trends per child, and deliver reports.
-            \item \textbf{Adaptive Scaffolding:} Build a staged difficulty engine that transitions to DDPG.
+            \item \textbf{Edge Computing Pipeline:} To develop an offline AI pipeline that processes atypical speech entirely on-device without any cloud dependency, ensuring zero latency and absolute privacy.
+            \item \textbf{Transfer Learning for Dataset Scarcity:} To adapt Wav2Vec 2.0 through a two-stage transfer learning process—first for Tamil phonetics, then for disordered pediatric speech.
+            \item \textbf{Acoustic Space Normalization:} To implement Vocal Tract Length Normalization (VTLN) to map child audio into adult acoustic space, ensuring children are not penalized for their physiology.
+            \item \textbf{Syllable-Level GOP Scoring:} To implement Goodness of Pronunciation (GOP) scoring that identifies exactly which syllable a child mispronounces within a complex word.
+            \item \textbf{Longitudinal Metric Tracking:} To track Vowel Space Area (VSA) and GOP trends per child, delivering bi-weekly structured reports to remote therapists.
+            \item \textbf{Adaptive Scaffolding:} To build a staged adaptive difficulty engine, transitioning safely from transparent rule-based control to Federated Deep Reinforcement Learning (DDPG).
         \end{itemize}
     \end{block}
 \end{frame}
 
+% ============================================================
+% SLIDE: CUMULATIVE RESEARCH GAP (WITH REAL CITATIONS)
+% ============================================================
 \begin{frame}{Cumulative Research Gap}
     \vspace{-5mm}
     \begin{columns}[T, totalwidth=\textwidth]
@@ -118,8 +206,8 @@
                 \tiny
                 \begin{itemize}
                     \setlength{\itemsep}{2pt}
-                    \item \textbf{Privacy Vulnerability:} High-accuracy ASR systems depend on cloud servers, risking pediatric voice exposure [1].
-                    \item \textbf{Edge Viability \& FHE:} Low-cost rural devices add latency, so lightweight edge architectures are preferable to heavy FHE encryption [1].
+                    \item \textbf{Privacy Vulnerability:} Cloud-based ASR exposes sensitive pediatric biometric voice data [1].
+                    \item \textbf{Edge Translation Gap:} Real-time edge AI exists for English [7], but adapting low-latency, syllable-level GOP for pediatric Tamil offline therapy remains unsolved.
                 \end{itemize}
             \end{block}
 
@@ -130,8 +218,8 @@
                 \tiny
                 \begin{itemize}
                     \setlength{\itemsep}{2pt}
-                    \item \textbf{Dataset Void:} Public corpora for Tamil pediatric disordered speech are unavailable [2], [3].
-                    \item \textbf{Physiological Bias:} Adult-trained models penalize children's higher formants [4].
+                    \item \textbf{Dataset Void:} Absence of Tamil pediatric disordered speech corpora hampers region-aware acoustic modeling [2], [3].
+                    \item \textbf{Physiological Bias:} Adult-trained models penalize children's naturally higher formants, mistaking vocal tract size for mispronunciation [4].
                 \end{itemize}
             \end{block}
         \end{column}
@@ -142,8 +230,8 @@
                 \tiny
                 \begin{itemize}
                     \setlength{\itemsep}{2pt}
-                    \item \textbf{Unactionable Scoring:} Existing tools evaluate speech at the whole-word level; DTW with GOP isolates syllable failures [5].
-                    \item \textbf{Subjective Tracking:} Rural interventions still lack repeatable acoustic metrics [5].
+                    \item \textbf{Unactionable Scoring:} Existing tools score at the word level. Integrating DTW with GOP is needed to isolate exact syllable failures [5].
+                    \item \textbf{Subjective Tracking:} Rural interventions lack objective, repeatable acoustic metrics for reliable longitudinal monitoring [5].
                 \end{itemize}
             \end{block}
 
@@ -154,8 +242,8 @@
                 \tiny
                 \begin{itemize}
                     \setlength{\itemsep}{2pt}
-                    \item \textbf{RL Data Scarcity:} Deep Reinforcement Learning agents need thousands of episodes to converge [6].
-                    \item \textbf{Remote Disconnect:} Existing home-based apps do not aggregate recurring phoneme errors into clinician dashboards.
+                    \item \textbf{RL Data Scarcity:} Deep RL requires thousands of episodes to converge, making Day-1 deployment clinically unsafe [6].
+                    \item \textbf{Autonomy Bottleneck:} GenAI therapy requires human-in-the-loop supervision [8], preventing fully autonomous, edge-based rural deployment.
                 \end{itemize}
             \end{block}
         \end{column}
@@ -163,134 +251,250 @@
 
     \vspace{2mm}
     \begin{beamercolorbox}[sep=3pt, center, rounded=true]{palette primary}
-        \tiny \textbf{The Foundational Gap:} No integrated, 100\% offline edge system combines DTW syllable precision, Dravidian acoustic normalization, and staged federated scaffolding for ASD children in rural South India [1]--[6].
+        \tiny \textbf{The Foundational Gap:} No integrated, 100\% offline edge system combines DTW-aligned syllable precision, Dravidian acoustic normalization, and safely staged federated scaffolding for ASD children in rural South India [1]--[9].
     \end{beamercolorbox}
 \end{frame}
+
+% ============================================================
+% SLIDE 3: OUR NOVELTY (1-3)
+% ============================================================
 \section{Novelty}
 \begin{frame}{Our Novelty \& Architectural Innovations (1/2)}
     \vspace{-2mm}
     \setbeamercolor{block title}{bg=amritaMaroon, fg=white}
     \begin{block}{\small 1. Syllable-Level GOP Scoring for Regional Languages}
         \footnotesize
-        Existing AI therapy systems score pronunciation at the word level, producing pass/fail data. We use Dynamic Time Warping (DTW) to align child audio at syllable boundaries and identify failed articulation.
+        Current AI scores speech at the word level. We use Dynamic Time Warping (DTW) to align child audio to templates at precise syllable boundaries. Computing log-likelihood ratios per syllable isolates the exact articulatory failure for therapists.
     \end{block}
     \vspace{2mm}
     
     \setbeamercolor{block title}{bg=black, fg=white}
     \begin{block}{\small 2. Two-Stage Transfer Learning}
         \footnotesize
-        Because no Tamil ASD speech corpus exists, training from scratch is not feasible. We fine-tune Wav2Vec 2.0 in two stages: first on AI4Bharat Kathbath for Dravidian phonetics, then on TORGO for disordered speech.
+        Lacking a Tamil ASD corpus, we fine-tune Wav2Vec 2.0 in two stages: first using AI4Bharat Kathbath for Dravidian phonetics, then using the TORGO dysarthric corpus as a validated proxy for disordered speech patterns.
     \end{block}
     \vspace{2mm}
 
     \setbeamercolor{block title}{bg=amritaMaroon, fg=white}
     \begin{block}{\small 3. VTLN Child-to-Adult Acoustic Mapping}
         \footnotesize
-        Children's shorter vocal tracts (10-12cm) produce higher formant frequencies than adult references (17cm). We apply VTLN before inference so the model measures pronunciation quality.
+        Children's shorter vocal tracts produce higher formants than adult references. We apply a VTLN warping factor to normalize child audio into adult acoustic space, ensuring the model assesses actual pronunciation effort, not biological anatomy.
     \end{block}
 \end{frame}
 
+% ============================================================
+% SLIDE 4: OUR NOVELTY (4-6)
 % ============================================================
 \begin{frame}{Our Novelty \& Architectural Innovations (2/2)}
     \vspace{-2mm}
     \setbeamercolor{block title}{bg=black, fg=white}
     \begin{block}{\small 4. Staged Adaptive Difficulty (Rule-Based to Federated DDPG)}
         \footnotesize
-        We propose a staged approach. Phase 1 deploys an auditable rule-based engine that manages therapy difficulty while aggregating interaction data. Phase 2 transitions to a DDPG agent after sufficient data supports stable policy decisions.
+        Phase 1 deploys an auditable rule-based engine that manages difficulty while aggregating interaction data. Phase 2 safely transitions to a DDPG reinforcement learning agent only after collecting enough data for stable policy decisions.
     \end{block}
     \vspace{2mm}
     
     \setbeamercolor{block title}{bg=amritaMaroon, fg=white}
     \begin{block}{\small 5. Privacy-First Federated Learning Without FHE Overhead}
         \footnotesize
-        Rigorous privacy on low-cost tablets rules out computationally heavy Fully Homomorphic Encryption. Our system achieves zero-trust privacy: raw audio is processed and deleted on-device, and only model weight gradients are synced.
+        FHE is too computationally heavy for low-cost edge tablets. We achieve zero-trust privacy by deleting raw audio immediately after on-device processing, syncing only mathematical model weight gradients to the aggregation server.
     \end{block}
     \vspace{2mm}
 
     \setbeamercolor{block title}{bg=black, fg=white}
     \begin{block}{\small 6. Automated Bi-Weekly Therapist Dashboards}
         \footnotesize
-        Using a MongoDB aggregation pipeline, the system queries session documents to detect recurring phoneme weaknesses. It then generates a report that alerts a therapist when specific consonant or vowel classes need intervention.
+        A MongoDB aggregation pipeline queries session documents to detect recurring phoneme weaknesses. This auto-generates structured reports, alerting remote therapists exactly when specific consonant or vowel classes require intervention.
     \end{block}
 \end{frame}
 
+% ============================================================
+% SLIDE 5: METHODOLOGY - ALGORITHMS
+% ============================================================
 \section{Methodology}
 \begin{frame}{Technical Knowledge: Core Algorithms in Action}
     \vspace{-2mm}
     \setbeamercolor{block title}{bg=amritaMaroon, fg=white}
     \begin{block}{\small Wav2Vec 2.0 \& Dynamic Time Warping (DTW)}
         \footnotesize
-        \textbf{How it works for our project:} Wav2Vec 2.0 uses convolutional layers to extract acoustic features, such as the burst of retroflex consonants, and a Transformer to capture long-range prosody. DTW aligns irregular ASD speech with a healthy reference template, allowing syllable boundaries to be isolated regardless of speaking speed.
+        \textbf{Function in Pipeline:} Wav2Vec 2.0 extracts local retroflex bursts (CNN) and long-range prosody (Transformer). DTW then mathematically aligns the child's variably paced speech against healthy templates, isolating precise syllable boundaries.
     \end{block}
     \vspace{1mm}
     
     \setbeamercolor{block title}{bg=black, fg=white}
     \begin{block}{\small Goodness of Pronunciation (GOP)}
         \footnotesize
-        \textbf{How it works for our project:} Instead of outputting text, GOP computes a confidence score for each isolated syllable from the acoustic model's likelihoods. Scores below the threshold flag articulation failures and provide actionable feedback.
+        \textbf{Function in Pipeline:} Instead of transcribing text, GOP computes a statistical confidence score (log-likelihood) for each syllable. Scores below an optimal threshold flag specific articulation failures, providing granular, actionable clinical feedback.
     \end{block}
     \vspace{1mm}
     
     \setbeamercolor{block title}{bg=amritaMaroon, fg=white}
     \begin{block}{\small Vowel Space Area (VSA) \& DDPG Scaffolding}
         \footnotesize
-        \textbf{How it works for our project:} VSA tracks the frequencies of core corner vowels across sessions. An expanding triangle area indicates better jaw and tongue motor control. The VSA trend, combined with real-time GOP scores, forms the environmental "state" used by the DDPG agent to fine-tune the next therapy prompt.
+        \textbf{Function in Pipeline:} VSA tracks corner vowel formants; an expanding area indicates improved jaw/tongue motor control. This VSA trend, combined with real-time GOP scores, forms the "state" our DDPG agent uses to dynamically adjust the difficulty of the next therapy prompt.
     \end{block}
 \end{frame}
+% ============================================================
+% SLIDE 6: ARCHITECTURE DIAGRAM
+% ============================================================
 \begin{frame}{System Architecture Overview}
     \centering
     \begin{figure}
-        \includegraphics[width=1\textwidth, height=0.7\textheight, ]{case_1_research_project/arch.png}
-        \caption{\footnotesize \textbf{System Pipeline:} Child Interaction, on-device acoustics, federated adaptation, and therapist reporting.}
+        \includegraphics[width=1\textwidth, height=0.7\textheight, ]{case_1_research_project/Screenshot 2026-03-29 165644.png}
+        \caption{\footnotesize \textbf{System Pipeline:} Child Interaction Layer, On-Device Acoustic Pipeline, Federated Adaptive Engine, and Remote Therapist Reporting Layer.}
     \end{figure}
 \end{frame}
 
+% --- Slide 2: Diagram Slide ---
+\begin{frame}{User Flow}
+    \begin{figure}
+        \centering
+        % The 'keepaspectratio' ensures the image isn't stretched or distorted.
+        % Replace the filename with your actual saved image name if it's different.
+        \includegraphics[width=\textwidth, height=0.75\textheight, keepaspectratio]{case_1_research_project/userflow.png}
+    \end{figure}
+\end{frame}
+% ============================================================
+% SLIDE 1: MODULE DESCRIPTION (1/2)
+% ============================================================
+\begin{frame}{Module Description (1/2): Edge Pipeline \& Feedback}
+    \vspace{-4mm}
+    \begin{columns}[T, totalwidth=\textwidth]
+
+        % COLUMN 1: Input & Extraction
+        \begin{column}{0.48\textwidth}
+            \setbeamercolor{block title}{bg=amritaMaroon, fg=white}
+            \begin{block}{1. Input \& VTLN Normalization}
+                \tiny
+                \textbf{Function:} Captures offline pediatric speech and maps the child's vocal tract to adult acoustic space to prevent physiological penalization. \\
+                \textbf{Data Flow:} 16kHz mono audio flows into the VTLN Normalizer, where a warping factor $\alpha$ transforms the raw waveform before extraction.
+            \end{block}
+
+            \vspace{1mm}
+            \setbeamercolor{block title}{bg=black, fg=white}
+            \begin{block}{2. Wav2Vec 2.0 Feature Extraction}
+                \tiny
+                \textbf{Function:} A two-stage fine-tuned edge model extracts local phonetic features (CNN) and long-range prosody (Transformer). \\
+                \textbf{Data Flow:} Normalized audio is converted into high-dimensional feature embeddings and Mel Filterbank/LPC outputs for formant tracking.
+            \end{block}
+        \end{column}
+
+        % COLUMN 2: Scoring & Scaffolding
+        \begin{column}{0.48\textwidth}
+            \setbeamercolor{block title}{bg=black, fg=white}
+            \begin{block}{3. DTW Alignment \& Scoring Engine}
+                \tiny
+                \textbf{Function:} Mathematically aligns atypical, variably paced speech to reference templates to isolate precise syllable boundaries.\\
+                \textbf{Data Flow:} Features are aligned with the Reference Syllable Bank. The engine outputs per-syllable log-likelihoods (GOP: 0.0-1.0) and Vowel Space Area (VSA) triangle coordinates.
+            \end{block}
+
+            \vspace{1mm}
+            \setbeamercolor{block title}{bg=amritaMaroon, fg=white}
+            \begin{block}{4. Adaptive Scaffolding Control}
+                \tiny
+                \textbf{Function:} Evaluates real-time pronunciation success to adjust the difficulty of the next prompt (transitioning from Rule-Based to DDPG). \\
+                \textbf{Data Flow:} The GOP Threshold Checker receives syllable scores. If avg GOP > 0.80, harder words are queued; if < 0.50, easier words are selected.
+            \end{block}
+        \end{column}
+
+    \end{columns}
+\end{frame}
+
+% ============================================================
+% SLIDE 2: MODULE DESCRIPTION (2/2)
+% ============================================================
+\begin{frame}{Module Description (2/2): Privacy, FL \& Analytics}
+    \vspace{-4mm}
+    \begin{columns}[T, totalwidth=\textwidth]
+
+        % COLUMN 1: Privacy & FL
+        \begin{column}{0.48\textwidth}
+            \setbeamercolor{block title}{bg=amritaMaroon, fg=white}
+            \begin{block}{5. Edge Storage \& Privacy Boundary}
+                \tiny
+                \textbf{Function:} Ensures zero-trust data sovereignty by processing and retaining data strictly on the local hardware. \\
+                \textbf{Data Flow:} VSA and GOP session scores are written to an optimized SQLite Local Store. \textbf{Raw audio is immediately deleted} post-session, enforcing the primary privacy boundary.
+            \end{block}
+
+            \vspace{1mm}
+            \setbeamercolor{block title}{bg=black, fg=white}
+            \begin{block}{6. Federated Learning Coordinator}
+                \tiny
+                \textbf{Function:} Utilizes the Flower (flwr) framework to continuously improve the global acoustic model without centralizing data. \\
+                \textbf{Data Flow:} The device transmits only mathematical gradient weights (via FedAvg) to the server. The improved global Wav2Vec policy is pushed back to the local device.
+            \end{block}
+        \end{column}
+
+        % COLUMN 2: Cloud Analytics & Dashboard
+        \begin{column}{0.48\textwidth}
+            \setbeamercolor{block title}{bg=black, fg=white}
+            \begin{block}{7. Cloud Sync \& Pattern Detection}
+                \tiny
+                \textbf{Function:} Safely transmits anonymized metrics to the cloud for longitudinal tracking and automated weakness identification. \\
+                \textbf{Data Flow:} When WiFi is available, the Weekly Sync Module sends structured JSON metadata to MongoDB Atlas. An aggregation pipeline scans for recurring retroflex consonant failures.
+            \end{block}
+
+            \vspace{1mm}
+            \setbeamercolor{block title}{bg=amritaMaroon, fg=white}
+            \begin{block}{8. Remote Therapist Dashboard}
+                \tiny
+                \textbf{Function:} Provides remote clinicians with actionable visual insights and control over the child's upcoming therapy routine. \\
+                \textbf{Data Flow:} Pattern reports generate per-phoneme heatmaps and VSA trend graphs. The therapist inputs new word difficulty assignments, which flow back to the edge device's prompt display.
+            \end{block}
+        \end{column}
+
+    \end{columns}
+\end{frame}
 % ============================================================
 % SLIDE 7: TECHNICAL CHALLENGES (BOXES & OVERFLOW FIXED)
 % ============================================================
 \section{Challenges}
 \begin{frame}{Technical \& Research Challenges}
-    \vspace{-3mm}
+    \vspace{-3mm} % Pulls content up to utilize empty space
+    
+    % Define the background color for the boxes
     \setbeamercolor{cbox}{bg=amritaMaroon!10, fg=black}
     
     \begin{columns}[T]
+        % ----- LEFT COLUMN -----
         \begin{column}{0.48\textwidth}
             
             \begin{beamercolorbox}[wd=\linewidth, sep=3pt, rounded=true]{cbox}
                 \textbf{\textcolor{amritaMaroon}{\footnotesize 1. Complete Dataset Scarcity}} \\[1mm]
                 {\scriptsize \textbf{Challenge:} Zero public samples of Tamil pediatric ASD speech.\\
-                \textbf{Solution:} Two-stage transfer learning (AI4Bharat + TORGO proxy) \& primary clinical data collection.\par}
+                \textbf{Solution:} 2-stage transfer learning (AI4Bharat + TORGO proxy) \& primary clinical data collection.\par}
             \end{beamercolorbox}
             \vspace{2mm}
             
             \begin{beamercolorbox}[wd=\linewidth, sep=3pt, rounded=true]{cbox}
                 \textbf{\textcolor{amritaMaroon}{\footnotesize 2. Child-Adult Acoustic Mismatch}} \\[1mm]
                 {\scriptsize \textbf{Challenge:} Adult models falsely penalize shorter child vocal tracts (higher formants).\\
-                \textbf{Solution:} VTLN mapping normalizes audio so scores reflect articulation effort.\par}
+                \textbf{Solution:} VTLN mapping normalizes audio to ensure scores reflect actual articulation effort.\par}
             \end{beamercolorbox}
             \vspace{2mm}
             
             \begin{beamercolorbox}[wd=\linewidth, sep=3pt, rounded=true]{cbox}
                 \textbf{\textcolor{amritaMaroon}{\footnotesize 3. Irregular Syllable Boundaries}} \\[1mm]
                 {\scriptsize \textbf{Challenge:} ASD speech contains unexpected pauses and heavily elongated phonemes.\\
-                \textbf{Solution:} DTW cost-matrix alignment optimizes boundaries without fixed durations.\par}
+                \textbf{Solution:} DTW cost-matrix alignment mathematically optimizes boundaries without fixed durations.\par}
             \end{beamercolorbox}
             
         \end{column}
 
+        % ----- RIGHT COLUMN -----
         \begin{column}{0.48\textwidth}
             
             \begin{beamercolorbox}[wd=\linewidth, sep=3pt, rounded=true]{cbox}
                 \textbf{\textcolor{amritaMaroon}{\footnotesize 4. Edge Latency Budgets}} \\[1mm]
                 {\scriptsize \textbf{Challenge:} Running Wav2Vec 2.0 under 200ms on low-cost Android tablets.\\
-                \textbf{Solution:} TinyML 8-bit quantization and student-teacher distillation compress the model.\par}
+                \textbf{Solution:} TinyML 8-bit quantization and student-teacher knowledge distillation compress the model.\par}
             \end{beamercolorbox}
             \vspace{2mm}
             
             \begin{beamercolorbox}[wd=\linewidth, sep=3pt, rounded=true]{cbox}
                 \textbf{\textcolor{amritaMaroon}{\footnotesize 5. DDPG Data Convergence Limits}} \\[1mm]
                 {\scriptsize \textbf{Challenge:} Deep RL needs thousands of episodes; day-1 deployment is clinically unsafe.\\
-                \textbf{Solution:} Phase 1 rule-based engine harvests FL data until the DDPG threshold is met.\par}
+                \textbf{Solution:} Phase 1 rule-based engine silently harvests FL data until the DDPG threshold is met.\par}
             \end{beamercolorbox}
             \vspace{2mm}
             
@@ -302,7 +506,9 @@
             
         \end{column}
     \end{columns}
-\end{frame}
+\end{frame}% ============================================================
+% SLIDE 8: EXPECTED OUTCOMES & METRICS (OVERFLOW & TABLE FIXED)
+% ============================================================
 \section{Outcomes}
 \begin{frame}{Expected Outcomes and Success Metrics}
     \vspace{-2mm}
@@ -346,10 +552,10 @@
                 \scriptsize
                 \textbf{Foundation Building:}
                 \begin{itemize}
-                    \item Validate VTLN on Kathbath.
-                    \item Establish the two-stage Wav2Vec fine-tuning setup.
-                    \item Code the DTW boundary detection and GOP scripts.
-                    \item Finalize the SQLite schema and prompt database.
+                    \item Complete and validate VTLN implementation on Kathbath.
+                    \item Establish the two-stage Wav2Vec fine-tuning environment.
+                    \item Code the DTW boundary detection and GOP scoring scripts.
+                    \item Finalize SQLite local schema and prompt database.
                 \end{itemize}
             \end{block}
         \end{column}
@@ -360,10 +566,10 @@
                 \scriptsize
                 \textbf{Integration \& Training:}
                 \begin{itemize}
-                    \item Execute fine-tuning and measure WER gains.
+                    \item Execute fine-tuning and measure WER improvements.
                     \item Integrate the VSA extraction pipeline.
-                    \item Deploy the rule-based engine and Flower framework.
-                    \item Develop the MongoDB schema and Therapist Dashboard v1.
+                    \item Deploy the Rule-Based engine and FL Flower framework.
+                    \item Develop MongoDB schema and Therapist Dashboard v1.
                     \item Finalize DDPG architecture specs.
                 \end{itemize}
             \end{block}
@@ -375,16 +581,74 @@
                 \scriptsize
                 \textbf{Validation \& Deployment:}
                 \begin{itemize}
-                    \item Execute primary ASD data collection through clinical centers.
-                    \item Perform end-to-end Proof-of-Concept testing.
+                    \item Execute primary ASD data collection via clinical centers.
+                    \item Perform full system Proof-of-Concept testing.
                     \item Conduct therapist dashboard pilot evaluations.
                     \item Run DDPG simulation on synthetic interaction data.
-                    \item Finalize the IEEE conference paper.
+                    \item Finalize IEEE conference paper.
                 \end{itemize}
             \end{block}
         \end{column}
     \end{columns}
 \end{frame}
+
+% ============================================================
+% SLIDE: FIELD STUDY
+% ============================================================
+\begin{frame}{Field Study: Sree Taarikaa School for Special Children}
+    \vspace{-4mm}
+    \begin{columns}[T, totalwidth=\textwidth]
+
+        % COLUMN 1: Clinical Observations
+        \begin{column}{0.48\textwidth}
+            \setbeamercolor{block title}{bg=amritaMaroon, fg=white}
+            \begin{block}{Clinical Insights on ASD Speech}
+                \tiny
+                \begin{itemize}
+                    \setlength{\itemsep}{3pt}
+                    \item \textbf{Neurological Impact:} ASD alters communication pathways, often resulting in delayed speech milestones, restrictive articulation, echolalia, and profound expressive vocabulary deficits.
+                    \item \textbf{Severity Stratification:} Therapists categorize children into \textbf{Low (Mild), Moderate, and Severe} spectrums to determine the necessary intensity of phonetic pacing.
+                    \item \textbf{Current Interventions:} Treatments heavily rely on hands-on, human-guided therapies (e.g., integrating fine motor exercises with speech drills and ball-based number identification) to stimulate language development.
+                \end{itemize}
+            \end{block}
+        \end{column}
+
+        % COLUMN 2: Data Collection
+        \begin{column}{0.48\textwidth}
+            \setbeamercolor{block title}{bg=black, fg=white}
+            \begin{block}{Primary Data Collection Strategy}
+                \tiny
+                \begin{itemize}
+                    \setlength{\itemsep}{3pt}
+                    \item \textbf{Proprietary Tamil Corpus:} Partnering with the institute to ethically record and curate targeted pediatric speech data for both \textbf{training and validation} of our edge models.
+                    \item \textbf{Elicitation Targets:} Recording a comprehensive acoustic range, capturing:
+                        \begin{itemize}
+                            \tiny
+                            \item Isolated Letters \& Syllables
+                            \item Target Words \& Simple Sentences
+                            \item Spontaneous Speech prompts
+                        \end{itemize}
+                    \item \textbf{Algorithmic Mapping:} This raw clinical data directly fuels:
+                        \begin{itemize}
+                            \tiny
+                            \item \textbf{VTLN:} Normalizing pediatric formants.
+                            \item \textbf{VSA \& GOP:} Assessing syllable-level accuracy.
+                            \item \textbf{DTW:} Temporally aligning atypical speech patterns.
+                        \end{itemize}
+                \end{itemize}
+            \end{block}
+        \end{column}
+    \end{columns}
+
+    \vspace{2mm}
+    \begin{beamercolorbox}[sep=3pt, center, rounded=true]{palette primary}
+        \tiny \textbf{Institutional Partner:} Sree Taarikaa School for Special Children, under the Centre for Indian Health Research and Development Centre (CIHRDC), KG Chavadi.\\
+        \textit{Reference: \url{https://cihrdc.org/taarikaa-school/}}
+    \end{beamercolorbox}
+\end{frame}
+% ============================================================
+% SLIDE 10: DATASETS USED (OVERFLOW & TABLE FIXED)
+% ============================================================
 \begin{frame}{Datasets Utilized for Training \& Validation}
     \vspace{-0.8mm}
     \centering
@@ -395,29 +659,30 @@
         \rowcolor{amritaMaroon}
         \textcolor{white}{\textbf{Dataset Name}} & \textcolor{white}{\textbf{Purpose in Project Pipeline}} & \textcolor{white}{\textbf{Source / Size}} \\
         \hline
-        \textbf{AI4Bharat Kathbath} & Stage 1 fine-tuning for Dravidian adaptation. & HuggingFace (130 hrs) \\
+        \textbf{AI4Bharat Kathbath} & Stage 1 fine-tuning for Dravidian phonetic adaptation. & HuggingFace (130 hrs) \\
         \hline
-        \textbf{IISc-MILE Tamil ASR} & Baseline Tamil phoneme benchmark. & OpenSLR (150 hrs) \\
+        \textbf{IISc-MILE Tamil ASR} & Benchmark testing for baseline Tamil phoneme recognition. & OpenSLR (150 hrs) \\
         \hline
-        \textbf{TORGO Database} & Stage 2 proxy for disordered speech. & Univ. of Toronto (7.5 hrs) \\
+        \textbf{TORGO Database} & Stage 2 fine-tuning as a validated proxy for disordered speech. & Univ. of Toronto (7.5 hrs) \\
         \hline
-        \textbf{TalkBank CHILDES} & Pediatric vocal-tract variation modeling. & talkbank.org \\
+        \textbf{TalkBank CHILDES} & Acoustic modeling to understand pediatric vocal tract variation. & talkbank.org \\
         \hline
-        \textbf{UASpeech/UltraSuite} & Atypical speech and boundary validation. & uaspeech/ultrasuite \\
+        \textbf{UASpeech/UltraSuite} & Atypical speech recognition and phonetic boundary validation. & uaspeech/ultrasuite \\
         \hline
-        \textbf{AI4Bharat MANGO} & Standard Tamil ASR baseline. & HuggingFace \\
+        \textbf{AI4Bharat MANGO} & Standardized Tamil ASR baseline benchmark testing. & HuggingFace \\
         \hline
-        \textbf{DAiSEE \& AffectNet} & Future Phase 3 stress-detection training. & IIT-H / Univ. Denver \\
+        \textbf{DAiSEE \& AffectNet} & Future Phase 3 training for Facial Action Unit stress detection. & IIT-H / Univ. Denver \\
         \hline
-        \textbf{Primary ASD Corpus} & Planned Tamil ASD speech corpus under ethical approval. & Therapy Centers (5 hrs) \\
+        \textbf{Primary ASD Corpus} & Novel Tamil ASD speech (Planned under ethical approval). & Therapy Centers (5 hrs) \\
         \hline
     \end{tabularx}
     
     \vspace{0.09mm}
     \begin{beamercolorbox}[sep=2pt, left, rounded=true]{palette primary}
-        \scriptsize \textbf{Dataset Proxy Rationale:} Because no Tamil ASD corpus exists natively, dysarthric speech (TORGO) serves as the primary scientific proxy. It shares critical acoustic anomalies with ASD speech, including reduced VSA.
+        \scriptsize \textbf{Dataset Proxy Rationale:} Because no Tamil ASD corpus exists natively, dysarthric speech (TORGO) serves as the primary scientific proxy. It shares critical acoustic anomalies with ASD speech, including reduced VSA .
     \end{beamercolorbox}
 \end{frame}
+
 
 % ============================================================
 % SLIDE 11: PROJECT DELIVERABLES (OVERFLOW FIXED)
@@ -430,17 +695,17 @@
     \footnotesize
     \begin{itemize}
         \setlength{\itemsep}{4pt}
-        \item \textbf{Quantized Edge Acoustic Models:} A TinyML-compressed Tamil ASD Wav2Vec model with WER benchmarks.
-        \item \textbf{Validated Processing Pipelines:} VTLN normalization, DTW syllable-boundary detection, and per-syllable GOP scoring.
-        \item \textbf{Longitudinal Tracking System:} An active VSA pipeline and MongoDB schema for motor speech tracking.
-        \item \textbf{Adaptive Scaffolding Engine:} A rule-based clinical difficulty engine, with Phase 2 Federated DDPG architecture specs.
-        \item \textbf{Privacy Framework:} A Flower-based Federated Learning setup that aggregates model weights without raw audio.
-        \item \textbf{Remote Therapist Dashboard:} A UI that generates bi-weekly reports on phoneme weaknesses.
-        \item \textbf{Clinical Artifacts:} The primary Tamil ASD speech dataset, an end-to-end clinical PoC report, and a drafted IEEE paper.
+        \item \textbf{Quantized Edge Acoustic Models:} A fully fine-tuned, TinyML-compressed Tamil ASD Wav2Vec model running locally with comprehensive Word Error Rate (WER) benchmarks.
+        \item \textbf{Validated Processing Pipelines:} Operational modules for VTLN vocal tract normalization, DTW syllable boundary detection, and per-syllable GOP confidence scoring.
+        \item \textbf{Longitudinal Tracking System:} An active VSA extraction pipeline functioning alongside a MongoDB schema to document motor speech improvements over time.
+        \item \textbf{Adaptive Scaffolding Engine:} A functional Rule-Based clinical difficulty engine, accompanied by a complete architecture specification for Phase 2 Federated DDPG deployment.
+        \item \textbf{Privacy Framework:} A proven Federated Learning implementation utilizing the Flower framework to aggregate model weights securely without raw audio transmission.
+        \item \textbf{Remote Therapist Dashboard:} A fully operational UI generating automated, bi-weekly clinical reports highlighting specific phoneme weaknesses.
+        \item \textbf{Clinical Artifacts:} The first-of-its-kind primary Tamil ASD speech dataset, an end-to-end clinical PoC validation report, and a drafted IEEE conference paper.
     \end{itemize}
 \end{frame}
 
-% ============================================================
+%  ============================================================
 % SLIDE 12: CONCLUSION
 % ============================================================
 \begin{frame}{Conclusion}
@@ -448,21 +713,21 @@
     \setbeamercolor{block title}{bg=black, fg=white}
     \begin{block}{A Targeted Solution for a Critical Gap}
         \small
-        This project is not a generic speech-to-text wrapper. Each technical decision addresses a specific clinical or geographic gap. The system is designed to provide therapist-level precision within the 3-to-8 year early intervention window, in settings where internet access and specialized clinics are unavailable.
+        This project does not attempt to be a generic speech-to-text wrapper. Every technical decision traces back to a specific clinical or geographic gap. The system is engineered to provide the precision of a trained therapist inside the 3-to-8 year early intervention window, operating in environments where internet and specialized clinics are unavailable.
     \end{block}
     
     \vspace{2mm}
     \textbf{Summary of Technical Justifications:}
     \begin{itemize}
-        \item \textbf{VTLN} addresses the acoustic differences between children and adults.
-        \item \textbf{Two-Stage Transfer Learning} bypasses the absence of Tamil ASD corpora.
+        \item \textbf{VTLN} exists because children are acoustically distinct from adults.
+        \item \textbf{Two-Stage Transfer Learning} exists to bypass the total absence of Tamil ASD corpora.
         \item \textbf{Syllable-Level DTW} replaces clinically unactionable whole-word grading.
-        \item \textbf{Federated Edge AI} is required because pediatric biometric privacy is legally non-negotiable.
+        \item \textbf{Federated Edge AI} exists because pediatric biometric privacy is legally non-negotiable.
     \end{itemize}
 
     \vspace{2mm}
     \begin{beamercolorbox}[sep=4pt, center, rounded=true]{palette primary}
-        \footnotesize \textbf{The Final Impact:} A system where a child in rural Tamil Nadu practices daily with real-time feedback, while a therapist in Chennai monitors articulatory progress securely and objectively.
+        \footnotesize \textbf{The Final Impact:} A system where a child in rural Tamil Nadu practices daily with real-time feedback, while a single therapist in Chennai monitors their articulatory progress securely and objectively.
     \end{beamercolorbox}
 \end{frame}
 
@@ -485,6 +750,10 @@
         \item A. Girirajan \textit{et al.}, ``An enhanced real-time automatic speech recognition system for Tamil language using Wav2Vec2 model,'' in \textit{Deep Learning Innovations for Regional Languages}. Hershey, PA, USA: IGI Global, 2024, pp. 112--135.
         
         \item T. Sharma \textit{et al.}, ``Edge AI: A comprehensive survey of technologies, applications, and challenges,'' in \textit{Proc. 1st Int. Conf. Adv. Comput. Emerg. Technol. (ACET)}, 2024, pp. 1--6.
+
+        \item P. Yentrapati \textit{et al.}, ``Real-time English speech assessment using edge AI and acoustic feature,'' in \textit{Proc. IEEE Int. Conf. (ICAECT)}, 2026, doi: 10.1109/ICAECT68478.2026.11426136.
+
+        \item C.-H. Chueh, M.-L. Wu, and Y.-T. Chen, ``Generative AI-powered clinical language therapy: A randomized controlled trial with 2000+ home recordings,'' \textit{JAMA Pediatrics}, vol. 179, no. 3, pp. 287--295, 2025.
     \end{enumerate}
 \end{frame}
 % ============================================================

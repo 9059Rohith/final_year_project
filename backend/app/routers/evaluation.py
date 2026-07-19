@@ -1,21 +1,36 @@
 """Evaluation router for speech and face analysis."""
-from fastapi import APIRouter, UploadFile, File, Form, WebSocket, WebSocketDisconnect, Depends
+from fastapi import (
+    APIRouter, UploadFile, File, Form, WebSocket, WebSocketDisconnect,
+    Depends, HTTPException, status,
+)
 from datetime import datetime
 import json
 from ..services.speech_evaluator import speech_evaluator
 from ..services.face_analyzer import face_analyzer
 from ..database import get_database
 from ..utils.jwt_handler import get_current_user
+from ..utils.rate_limit import RateLimiter
 
 
 router = APIRouter(prefix="/api/evaluate", tags=["evaluation"])
 
+# Speech evaluation runs ML models and is expensive — throttle per client.
+speech_rate_limit = RateLimiter(times=30, seconds=60)
 
-@router.post("/speech")
+# Accept common browser/mobile recording formats only.
+ALLOWED_AUDIO_TYPES = {
+    "audio/webm", "audio/wav", "audio/x-wav", "audio/wave",
+    "audio/mpeg", "audio/mp4", "audio/m4a", "audio/x-m4a",
+    "audio/ogg", "audio/3gpp", "application/octet-stream",
+}
+MAX_AUDIO_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
+@router.post("/speech", dependencies=[Depends(speech_rate_limit)])
 async def evaluate_speech(
     audio: UploadFile = File(...),
-    target_phoneme: str = Form(...),
-    lesson_id: int = Form(...),
+    target_phoneme: str = Form(..., min_length=1, max_length=64),
+    lesson_id: int = Form(..., ge=1),
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -37,11 +52,30 @@ async def evaluate_speech(
     print(f"   Lesson: {lesson_id}")
     print("="*60)
     
+    # Validate content type (reject obviously wrong uploads before reading).
+    if audio.content_type and audio.content_type not in ALLOWED_AUDIO_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail=f"Unsupported audio type: {audio.content_type}",
+        )
+
     try:
         # Read audio bytes
         audio_bytes = await audio.read()
         print(f"📦 Audio received: {len(audio_bytes)} bytes")
-        
+
+        # Validate size: reject empty and oversized uploads.
+        if not audio_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Empty audio file.",
+            )
+        if len(audio_bytes) > MAX_AUDIO_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail="Audio file too large (max 10 MB).",
+            )
+
         # Evaluate pronunciation
         result = speech_evaluator.evaluate_pronunciation(
             audio_bytes,
@@ -63,7 +97,10 @@ async def evaluate_speech(
         print("="*60 + "\n")
         
         return result
-        
+
+    except HTTPException:
+        # Validation errors (size/type) should surface as real HTTP errors.
+        raise
     except Exception as e:
         print(f"\n❌ ERROR in evaluate_speech: {e}")
         import traceback
