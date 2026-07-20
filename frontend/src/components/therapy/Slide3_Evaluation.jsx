@@ -7,6 +7,7 @@ import { useFaceDetection } from '../../hooks/useFaceDetection'
 import { evaluationAPI } from '../../services/api'
 import { useTherapyStore } from '../../store/therapyStore'
 import toast from 'react-hot-toast'
+import MitraCompanion from '../three/MitraCompanion'
 
 const MAX_ATTEMPTS = 3
 const SUCCESS_THRESHOLD = 70
@@ -508,6 +509,22 @@ export default function Slide3_Evaluation({ lesson, onNext, onPrev }) {
             )}
           </motion.div>
         </div>
+
+      {/* MITRA Companion — fixed bottom-right, reacts to score + recording */}
+      <motion.div
+        initial={{ opacity: 0, x: 80 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: 0.6, type: 'spring', stiffness: 200 }}
+        className="fixed bottom-6 right-6 z-40 pointer-events-none"
+      >
+        <MitraCompanion
+          slide={3}
+          score={evaluationResult ? Math.round(evaluationResult.accuracy || 0) : null}
+          audioLevel={micLevel}
+          isRecording={isRecording}
+          compact
+        />
+      </motion.div>
 
         {/* Navigation */}
         <div className="flex justify-between mt-7">

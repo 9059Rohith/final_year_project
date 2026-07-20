@@ -7,3 +7,17 @@ __pycache__/
 .vscode/
 # Large files exceeding GitHub 100MB limit
 all_literature_surveypapers/prosody.pdf
+
+# Mitra (new stack)
+mitra-backend/venv/
+mitra-backend/.env
+mitra-backend/uploads/
+mitra-backend/*.log
+mitra-frontend/node_modules/
+mitra-frontend/.next/
+mitra-frontend/.env.local
+mitra-frontend/tsconfig.tsbuildinfo
+mitra-flutter/build/
+mitra-flutter/.dart_tool/
+mitra-flutter/ios/Pods/
+*.log

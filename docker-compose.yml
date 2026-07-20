@@ -1,0 +1,148 @@
+version: "3.9"
+
+services:
+  # ── Database ─────────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: mitra
+      POSTGRES_USER: mitra
+      POSTGRES_PASSWORD: mitra_secure_2024
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mitra -d mitra"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Redis ─────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── FastAPI Backend ───────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./mitra-backend
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://mitra:mitra_secure_2024@postgres:5432/mitra
+      SYNC_DATABASE_URL: postgresql://mitra:mitra_secure_2024@postgres:5432/mitra
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: mitra-super-secret-jwt-key-2024-change-in-production
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
+      REFRESH_TOKEN_EXPIRE_DAYS: 30
+      CORS_ORIGINS: "http://localhost:3000,http://frontend:3000"
+      UPLOAD_DIR: /app/uploads
+      TTS_CACHE_DIR: /app/tts_cache
+      WHISPER_MODEL: medium
+      APP_ENV: production
+    volumes:
+      - uploads_data:/app/uploads
+      - tts_cache_data:/app/tts_cache
+      - whisper_cache:/root/.cache/whisper
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command: >
+      sh -c "
+        alembic upgrade head &&
+        python -m app.db.seed &&
+        uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+      "
+
+  # ── Celery Worker (ASR scoring) ───────────────────────────────────────────────
+  celery_worker:
+    build:
+      context: ./mitra-backend
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      DATABASE_URL: postgresql+asyncpg://mitra:mitra_secure_2024@postgres:5432/mitra
+      SYNC_DATABASE_URL: postgresql://mitra:mitra_secure_2024@postgres:5432/mitra
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: mitra-super-secret-jwt-key-2024-change-in-production
+      UPLOAD_DIR: /app/uploads
+      TTS_CACHE_DIR: /app/tts_cache
+      WHISPER_MODEL: medium
+      APP_ENV: production
+    volumes:
+      - uploads_data:/app/uploads
+      - tts_cache_data:/app/tts_cache
+      - whisper_cache:/root/.cache/whisper
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.worker.celery_app worker --loglevel=info --concurrency=2 -Q celery
+
+  # ── Celery Beat (nightly snapshots) ──────────────────────────────────────────
+  celery_beat:
+    build:
+      context: ./mitra-backend
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      DATABASE_URL: postgresql+asyncpg://mitra:mitra_secure_2024@postgres:5432/mitra
+      SYNC_DATABASE_URL: postgresql://mitra:mitra_secure_2024@postgres:5432/mitra
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: mitra-super-secret-jwt-key-2024-change-in-production
+      UPLOAD_DIR: /app/uploads
+      TTS_CACHE_DIR: /app/tts_cache
+      APP_ENV: production
+    volumes:
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.worker.celery_app beat --loglevel=info
+
+  # ── Next.js Frontend ──────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./mitra-frontend
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:8000
+      NODE_ENV: production
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads_data:
+  tts_cache_data:
+  whisper_cache:

@@ -1,12 +1,20 @@
 """Face analysis service using MediaPipe."""
-import cv2
 import numpy as np
 from typing import Dict
+
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
+    print("[WARNING] opencv-python not installed. Face analysis will use fallback mode.")
+
 try:
     import mediapipe as mp
     MEDIAPIPE_AVAILABLE = True
 except ImportError:
     MEDIAPIPE_AVAILABLE = False
+    print("[WARNING] mediapipe not installed. Face analysis will use fallback mode.")
 
 from ..models.evaluation import FaceAnalysisResult
 
@@ -18,7 +26,7 @@ class FaceAnalyzer:
         """Initialize face analyzer."""
         self.face_mesh = None
         
-        if MEDIAPIPE_AVAILABLE:
+        if MEDIAPIPE_AVAILABLE and CV2_AVAILABLE:
             try:
                 mp_face_mesh = mp.solutions.face_mesh
                 self.face_mesh = mp_face_mesh.FaceMesh(
@@ -27,9 +35,11 @@ class FaceAnalyzer:
                     min_detection_confidence=0.5,
                     min_tracking_confidence=0.5
                 )
-                print("✅ MediaPipe Face Mesh initialized")
+                print("[OK] MediaPipe Face Mesh initialized")
             except Exception as e:
-                print(f"⚠️  Could not initialize MediaPipe: {e}")
+                print(f"[WARN] Could not initialize MediaPipe: {e}")
+        else:
+            print("[INFO] Face analysis running in fallback mode (cv2/mediapipe not available)")
     
     def analyze_frame(self, frame_bytes: bytes) -> FaceAnalysisResult:
         """
@@ -41,6 +51,16 @@ class FaceAnalyzer:
         Returns:
             FaceAnalysisResult with mouth and stress metrics
         """
+        if not CV2_AVAILABLE:
+            # Fallback when cv2 is not installed
+            return FaceAnalysisResult(
+                face_detected=True,
+                mouth_open_ratio=0.3,
+                mouth_is_open=False,
+                stress_level=0.0,
+                emotion="neutral"
+            )
+
         try:
             # Decode image
             nparr = np.frombuffer(frame_bytes, np.uint8)
@@ -92,76 +112,41 @@ class FaceAnalyzer:
             )
             
         except Exception as e:
-            print(f"Error in analyze_frame: {e}")
+            print(f"[ERROR] Error in analyze_frame: {e}")
             return FaceAnalysisResult(face_detected=False)
     
-    def _calculate_mouth_metrics(
-        self,
-        landmarks,
-        frame_shape: tuple
-    ) -> tuple:
+    def _calculate_mouth_metrics(self, landmarks, frame_shape: tuple) -> tuple:
         """Calculate mouth open ratio and status."""
         try:
             h, w = frame_shape[:2]
-            
-            # Key landmarks for mouth
-            # Upper lip: landmark 13
-            # Lower lip: landmark 14
-            # Left mouth corner: landmark 61
-            # Right mouth corner: landmark 291
-            
             upper_lip = landmarks.landmark[13]
             lower_lip = landmarks.landmark[14]
             left_corner = landmarks.landmark[61]
             right_corner = landmarks.landmark[291]
-            
-            # Calculate vertical mouth opening (in pixels)
             mouth_height = abs(lower_lip.y - upper_lip.y) * h
-            
-            # Calculate horizontal mouth width (in pixels)
             mouth_width = abs(right_corner.x - left_corner.x) * w
-            
-            # Calculate ratio
             if mouth_width > 0:
                 mouth_open_ratio = mouth_height / mouth_width
             else:
                 mouth_open_ratio = 0.0
-            
-            # Threshold for "mouth open" (typically > 0.3-0.4)
             mouth_is_open = mouth_open_ratio > 0.35
-            
             return float(mouth_open_ratio), mouth_is_open
-            
         except Exception as e:
-            print(f"Error calculating mouth metrics: {e}")
+            print(f"[ERROR] Error calculating mouth metrics: {e}")
             return 0.0, False
     
     def _calculate_stress_level(self, landmarks, frame_shape: tuple) -> float:
         """Calculate stress level from brow landmarks."""
         try:
             h, w = frame_shape[:2]
-            
-            # Brow landmarks (simplified)
-            # Left brow: landmarks 70, 63
-            # Right brow: landmarks 300, 293
-            
             left_brow_inner = landmarks.landmark[70]
-            left_brow_outer = landmarks.landmark[63]
             right_brow_inner = landmarks.landmark[300]
-            right_brow_outer = landmarks.landmark[293]
-            
-            # Calculate brow furrow (distance between inner brow points)
             brow_distance = abs(right_brow_inner.x - left_brow_inner.x) * w
-            
-            # Normalize (typical relaxed distance is ~60-80 pixels at 640px width)
-            # Smaller distance = more furrowed = more stress
             normalized_distance = brow_distance / (w * 0.12)
             stress_level = max(0, min(1, 1.5 - normalized_distance))
-            
             return float(stress_level)
-            
         except Exception as e:
-            print(f"Error calculating stress: {e}")
+            print(f"[ERROR] Error calculating stress: {e}")
             return 0.0
     
     def _determine_emotion(self, mouth_is_open: bool, stress_level: float) -> str:

@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
     await connect_to_mongo()
-    await seed_admin_user()
+    await seed_admin_user()  # skips safely if DB not connected
     yield
     # Shutdown
     await close_mongo_connection()
@@ -149,6 +149,11 @@ async def seed_admin_user():
     access to every admin endpoint including role changes and deletes.
     """
     from datetime import datetime
+    from .database import db_manager
+
+    if not db_manager.connected:
+        print("[INFO] Skipping admin seed — MongoDB not connected.")
+        return
 
     db = get_database()
 
@@ -176,17 +181,20 @@ async def seed_admin_user():
     ]
 
     for email, password, name, is_super in seeds:
-        existing = await db.users.find_one({"email": email})
-        if not existing:
-            await db.users.insert_one(_admin_doc(email, password, name, is_super))
-            print(f"✅ Admin user seeded: {email}{' (super-admin)' if is_super else ''}")
-        else:
-            # Ensure the super-admin flag/role is applied even if the row predates this change.
-            if is_super and (not existing.get("is_super_admin") or existing.get("role") != "admin"):
-                await db.users.update_one(
-                    {"_id": existing["_id"]},
-                    {"$set": {"role": "admin", "is_super_admin": True}},
-                )
-                print(f"✅ Elevated existing user to super-admin: {email}")
+        try:
+            existing = await db.users.find_one({"email": email})
+            if not existing:
+                await db.users.insert_one(_admin_doc(email, password, name, is_super))
+                print(f"[OK] Admin user seeded: {email}{' (super-admin)' if is_super else ''}")
             else:
-                print(f"✅ Admin user already exists: {email}")
+                # Ensure the super-admin flag/role is applied even if the row predates this change.
+                if is_super and (not existing.get("is_super_admin") or existing.get("role") != "admin"):
+                    await db.users.update_one(
+                        {"_id": existing["_id"]},
+                        {"$set": {"role": "admin", "is_super_admin": True}},
+                    )
+                    print(f"[OK] Elevated existing user to super-admin: {email}")
+                else:
+                    print(f"[OK] Admin user already exists: {email}")
+        except Exception as e:
+            print(f"[WARN] Could not seed {email}: {e}")

@@ -22,6 +22,7 @@ import strawberryImg from '../assets/images/strawberry_cartoon.png'
 import huskyImg from '../assets/images/huskey_playing_with_ball.png'
 import rainbowImg from '../assets/images/rainbow_wgg.png'
 import cocoImg from '../assets/images/coco_cartton.png'
+import MitraRobot from '../components/three/MitraRobot'
 
 // ─────────────────────────────────────────────────
 // Animated Counter Component
@@ -482,31 +483,29 @@ export default function LandingPage() {
                 </div>
               </motion.div>
               
-              {/* Right: Illustration Grid */}
+              {/* Right: MITRA 3D Robot Companion */}
               <motion.div
                 initial={{ opacity: 0, x: 60 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.9, delay: 0.5 }}
-                className="relative hidden lg:block"
+                className="relative hidden lg:flex flex-col items-center justify-center"
               >
-                <div className="grid grid-cols-2 gap-4">
-                  {[happyBearImg, fruitHappyImg, cloudAnimationImg, chefKidImg].map((img, i) => (
-                    <motion.div
-                      key={i}
-                      whileHover={{ scale: 1.05, rotate: i % 2 === 0 ? -2 : 2 }}
-                      className="relative group"
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-br from-primary-500/20 to-secondary-500/20 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                      <img src={img} alt={`Therapy illustration ${i + 1}`} className="rounded-2xl shadow-2xl w-full h-52 object-cover border border-white/10" loading="lazy" />
-                    </motion.div>
-                  ))}
-                </div>
-                
-                {/* Floating badge */}
+                {/* Robot */}
+                <MitraRobot
+                  mood="happy"
+                  size={480}
+                  showBubble
+                  message="Hi! I'm MITRA — your speech companion! 👋"
+                  autoRotate={false}
+                  zoom={1.1}
+                  className="w-full"
+                />
+
+                {/* Floating badge — top right */}
                 <motion.div
                   animate={{ y: [0, -12, 0] }}
                   transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-                  className="absolute -top-8 -right-8 glass rounded-2xl p-4 shadow-premium"
+                  className="absolute top-8 -right-4 glass rounded-2xl p-4 shadow-premium"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-gradient-to-br from-accent-400 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg">
@@ -518,12 +517,12 @@ export default function LandingPage() {
                     </div>
                   </div>
                 </motion.div>
-                
-                {/* Second floating badge */}
+
+                {/* Floating badge — bottom left */}
                 <motion.div
                   animate={{ y: [0, 10, 0] }}
                   transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
-                  className="absolute -bottom-6 -left-8 glass rounded-2xl p-4 shadow-premium"
+                  className="absolute bottom-8 -left-4 glass rounded-2xl p-4 shadow-premium"
                 >
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-gradient-to-br from-gold-400 to-amber-500 rounded-xl flex items-center justify-center shadow-lg">
@@ -533,6 +532,18 @@ export default function LandingPage() {
                       <div className="font-bold text-neutral-900 text-lg">3-Star</div>
                       <div className="text-xs text-neutral-500">Reward System</div>
                     </div>
+                  </div>
+                </motion.div>
+
+                {/* Floating Tamil letter badge */}
+                <motion.div
+                  animate={{ y: [0, -8, 0], rotate: [-3, 3, -3] }}
+                  transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
+                  className="absolute top-1/2 -left-6 glass rounded-2xl p-3 shadow-premium"
+                >
+                  <div className="text-center">
+                    <div className="tamil-letter text-3xl font-bold text-primary-600">அ</div>
+                    <div className="text-[10px] text-neutral-500 font-medium">Tamil</div>
                   </div>
                 </motion.div>
               </motion.div>

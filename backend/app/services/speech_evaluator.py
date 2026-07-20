@@ -2,10 +2,22 @@
 import io
 import numpy as np
 from typing import Dict, Tuple
-import librosa
-import torch
 import warnings
 warnings.filterwarnings('ignore')
+
+try:
+    import librosa
+    LIBROSA_AVAILABLE = True
+except ImportError:
+    LIBROSA_AVAILABLE = False
+    print("[WARNING] librosa not installed. Speech scoring will use MFCC fallback mode.")
+
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+    print("[WARNING] torch not installed. Wav2Vec2 ASR will be skipped.")
 
 try:
     from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor, Wav2Vec2CTCTokenizer
@@ -29,28 +41,19 @@ class SpeechEvaluator:
         
         if TRANSFORMERS_AVAILABLE:
             try:
-                print("🔄 Loading Wav2Vec2 model...")
-                # Use a more suitable model for phoneme recognition
-                # facebook/wav2vec2-large-960h-lv60-self is better trained
+                print("[INFO] Loading Wav2Vec2 model...")
                 model_name = "facebook/wav2vec2-base-960h"
-                
                 self.processor = Wav2Vec2Processor.from_pretrained(model_name)
                 self.model = Wav2Vec2ForCTC.from_pretrained(model_name)
-                
-                # Set to evaluation mode
                 self.model.eval()
-                
-                print(f"✅ Wav2Vec2 model loaded successfully: {model_name}")
-                print(f"   - Model size: {sum(p.numel() for p in self.model.parameters()) / 1e6:.1f}M parameters")
-                print(f"   - Device: {next(self.model.parameters()).device}")
+                print(f"[OK] Wav2Vec2 model loaded: {model_name}")
             except Exception as e:
-                print(f"❌ Could not load Wav2Vec2 model: {e}")
+                print(f"[WARN] Could not load Wav2Vec2 model: {e}")
                 print("   Using fallback MFCC-based evaluation")
                 self.model = None
                 self.processor = None
         else:
-            print("⚠️ Transformers library not available")
-            print("   Install with: pip install transformers torch")
+            print("[WARN] Transformers library not available. Install: pip install transformers torch")
     
     def _init_reference_mfccs(self) -> Dict[str, np.ndarray]:
         """Initialize reference MFCC templates for each phoneme."""
@@ -86,27 +89,27 @@ class SpeechEvaluator:
         Returns:
             Dictionary with evaluation metrics
         """
-        print(f"\n🎯 Evaluating pronunciation for: {target_phoneme}")
+        print(f"\n[EVAL] Evaluating pronunciation for: {target_phoneme}")
         
         try:
             # Extract MFCC features
             user_mfcc = extract_mfcc(audio_bytes)
-            print(f"📊 User MFCC extracted: shape {user_mfcc.shape}")
+            print(f"[INFO] User MFCC extracted: shape {user_mfcc.shape}")
             
             # Get reference MFCC for target phoneme
             ref_mfcc = self.reference_mfccs.get(
                 target_phoneme.lower(),
                 self.reference_mfccs["a"]
             )
-            print(f"📚 Reference MFCC loaded for: {target_phoneme}")
+            print(f"[INFO] Reference MFCC loaded for: {target_phoneme}")
             
             # Calculate MFCC similarity
             mfcc_score = calculate_audio_similarity(user_mfcc, ref_mfcc)
-            print(f"✅ MFCC Similarity Score: {mfcc_score:.2f}/100")
+            print(f"[INFO] MFCC Similarity Score: {mfcc_score:.2f}/100")
             
             # Calculate airflow score
             airflow_score = calculate_airflow_score(audio_bytes)
-            print(f"💨 Airflow Score: {airflow_score:.2f}")
+            print(f"[INFO] Airflow Score: {airflow_score:.2f}")
             
             # Phoneme recognition using Wav2Vec2
             phoneme_match = False
@@ -116,15 +119,15 @@ class SpeechEvaluator:
                 try:
                     transcription = self._transcribe_audio(audio_bytes)
                     phoneme_match = self._match_phoneme(transcription, target_phoneme)
-                    print(f"🎤 Transcription: '{transcription}' | Match: {phoneme_match}")
+                    print(f"[INFO] Transcription: '{transcription}' | Match: {phoneme_match}")
                 except Exception as e:
-                    print(f"⚠️ Transcription error: {e}")
+                    print(f"[WARN] Transcription error: {e}")
                     # Fallback: use MFCC score as proxy
                     phoneme_match = mfcc_score > 65
             else:
                 # Fallback: use MFCC score as proxy
                 phoneme_match = mfcc_score > 65
-                print(f"ℹ️ Using MFCC-based phoneme matching: {phoneme_match}")
+                print(f"[INFO] Using MFCC-based phoneme matching: {phoneme_match}")
 
             # Real syllable-level GOP via VTLN + DTW forced alignment over the
             # Wav2Vec2 CTC posteriorgram. Reference-free; None if model absent.
@@ -136,11 +139,11 @@ class SpeechEvaluator:
                         audio_np, target_phoneme, self.model, self.processor
                     )
                     if gop_result:
-                        print(f"🧩 GOP: {gop_result['overall_gop']:.2f} "
+                        print(f"[INFO] GOP: {gop_result['overall_gop']:.2f} "
                               f"weakest='{gop_result['weakest_syllable']}' "
                               f"{gop_result['syllables']}")
                 except Exception as e:
-                    print(f"⚠️ GOP computation error: {e}")
+                    print(f"[WARN] GOP computation error: {e}")
                     gop_result = None
 
             # gop_score is the real GOP (0-100) when available, else the MFCC proxy
@@ -154,7 +157,7 @@ class SpeechEvaluator:
                 mfcc_score, airflow_score, phoneme_match,
                 gop_score=gop_result["overall_gop"] * 100.0 if gop_result else None,
             )
-            print(f"🎯 Final Accuracy: {accuracy:.2f}%")
+            print(f"[INFO] Final Accuracy: {accuracy:.2f}%")
 
             # Generate feedback (syllable-aware when GOP is available)
             feedback = self._generate_feedback(
@@ -177,11 +180,11 @@ class SpeechEvaluator:
                 "weakest_syllable": gop_result["weakest_syllable"] if gop_result else None,
             }
             
-            print(f"✨ Evaluation complete: {result}\n")
+            print(f"[OK] Evaluation complete: accuracy={result['accuracy']}\n")
             return result
             
         except Exception as e:
-            print(f"❌ Error in evaluate_pronunciation: {e}")
+            print(f"[ERROR] Error in evaluate_pronunciation: {e}")
             import traceback
             traceback.print_exc()
             return {
@@ -235,12 +238,12 @@ class SpeechEvaluator:
             # Clean up transcription
             transcription = transcription.lower().strip()
             
-            print(f"   🎤 Raw transcription: '{transcription}'")
+            print(f"   [INFO] Raw transcription: '{transcription}'")
             
             return transcription
             
         except Exception as e:
-            print(f"   ❌ Transcription error: {e}")
+            print(f"   [ERROR] Transcription error: {e}")
             import traceback
             traceback.print_exc()
             return ""
@@ -274,12 +277,12 @@ class SpeechEvaluator:
         if target in phoneme_map:
             for variant in phoneme_map[target]:
                 if variant in transcription:
-                    print(f"   ✅ Phoneme match found: '{variant}' in '{transcription}'")
+                    print(f"   [OK] Phoneme match found: '{variant}' in '{transcription}'")
                     return True
         
         # Fuzzy matching - check if first letter matches
         if transcription and target and transcription[0] == target[0]:
-            print(f"   ~ Partial match: First letter '{target[0]}' matches")
+            print(f"   [~] Partial match: First letter '{target[0]}' matches")
             return True
         
         return False

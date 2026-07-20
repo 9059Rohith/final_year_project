@@ -1,0 +1,2 @@
+Place app images here (PNG, JPEG, SVG).
+e.g. onboarding illustrations, logos.

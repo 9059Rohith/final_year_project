@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { Volume2 } from 'lucide-react'
 import { Howl } from 'howler'
 import { useSettingsStore } from '../../store/settingsStore'
+import MitraCompanion from '../three/MitraCompanion'
 
 export default function Slide1_Picture({ lesson, onNext }) {
   const { autoPlay, soundEnabled } = useSettingsStore()
@@ -160,6 +161,16 @@ export default function Slide1_Picture({ lesson, onNext }) {
           </button>
         </motion.div>
       </div>
+
+      {/* MITRA Companion — fixed bottom-right */}
+      <motion.div
+        initial={{ opacity: 0, x: 80 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: 0.8, type: 'spring', stiffness: 200 }}
+        className="fixed bottom-6 right-6 z-40 pointer-events-none"
+      >
+        <MitraCompanion slide={1} compact />
+      </motion.div>
     </div>
   )
 }

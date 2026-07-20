@@ -8,6 +8,7 @@ import { progressAPI } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
 import { useSettingsStore } from '../../store/settingsStore'
 import toast from 'react-hot-toast'
+import MitraCompanion from '../three/MitraCompanion'
 
 const motivationalMessages = [
   "🌟 Outstanding! You're a superstar!",
@@ -109,6 +110,9 @@ export default function Slide5_Rewards({ lesson }) {
     }
   }
   
+  // Map stars to robot mood
+  const robotMood = stars === 3 ? 'celebrate' : stars === 2 ? 'happy' : stars === 1 ? 'encourage' : 'thinking'
+
   return (
     <div className="h-full flex items-center justify-center p-8 relative">
       {stars >= 2 && <Confetti />}
@@ -256,6 +260,20 @@ export default function Slide5_Rewards({ lesson }) {
           </motion.div>
         </motion.div>
       </div>
+
+      {/* MITRA Companion — celebrates with the child! */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0, x: 80 }}
+        animate={{ opacity: 1, scale: 1, x: 0 }}
+        transition={{ delay: 1.0, type: 'spring', stiffness: 180, damping: 18 }}
+        className="fixed bottom-6 right-6 z-40 pointer-events-none"
+      >
+        <MitraCompanion
+          slide={5}
+          score={Math.round(latestResult.accuracy)}
+          compact
+        />
+      </motion.div>
     </div>
   )
 }
