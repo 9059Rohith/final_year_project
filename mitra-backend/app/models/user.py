@@ -44,9 +44,10 @@ class TherapistProfile(Base, UUIDMixin, TimestampMixin):
     years_of_experience = Column(Integer, default=0)
 
     # Relationships
+    # Note: children.therapist_id FKs to users.id, not therapist_profiles.id
+    # (see migration 0001) — there is no direct FK path from here to Child.
+    # Query Child via the User row (current_user.id), not via this profile.
     user = relationship("User", back_populates="therapist_profile")
-    children = relationship("Child", back_populates="therapist", foreign_keys="Child.therapist_id")
-    notes = relationship("TherapistNote", back_populates="therapist")
 
 
 class ParentProfile(Base, UUIDMixin, TimestampMixin):
@@ -59,5 +60,6 @@ class ParentProfile(Base, UUIDMixin, TimestampMixin):
     preferred_language = Column(String(10), default="ta")
 
     # Relationships
+    # Note: children.parent_id FKs to users.id, not parent_profiles.id (see
+    # migration 0001) — query Child via the User row, not via this profile.
     user = relationship("User", back_populates="parent_profile")
-    children = relationship("Child", back_populates="parent", foreign_keys="Child.parent_id")

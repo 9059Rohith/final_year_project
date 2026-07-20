@@ -1,5 +1,5 @@
 """Therapist router — dashboard, assigned children, notes, module assignment."""
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
 
@@ -14,8 +14,9 @@ from ..models.child import Child
 from ..models.content import TherapyModule
 from ..models.program import AssignedProgram, ProgramStatus
 from ..models.session import TherapySession, ProgressSnapshot
-from ..models.social import TherapistNote
+from ..models.social import TherapistNote, NotificationType
 from ..utils.jwt_handler import get_current_user, require_role
+from ..utils.notifications import notify
 
 router = APIRouter()
 
@@ -57,6 +58,7 @@ async def therapist_dashboard(
     child_ids = [c.id for c in children]
 
     total_sessions = 0
+    sessions_this_week = 0
     if child_ids:
         sess_count = await db.execute(
             select(func.count(TherapySession.id)).where(
@@ -64,6 +66,22 @@ async def therapist_dashboard(
             )
         )
         total_sessions = sess_count.scalar() or 0
+
+        week_ago = datetime.now(timezone.utc) - timedelta(days=7)
+        week_count = await db.execute(
+            select(func.count(TherapySession.id)).where(
+                TherapySession.child_id.in_(child_ids),
+                TherapySession.created_at >= week_ago,
+            )
+        )
+        sessions_this_week = week_count.scalar() or 0
+
+    modules_count = await db.execute(
+        select(func.count(TherapyModule.id)).where(
+            TherapyModule.created_by_id == current_user.id
+        )
+    )
+    total_modules = modules_count.scalar() or 0
 
     # Recent sessions
     recent_sessions = []
@@ -88,6 +106,8 @@ async def therapist_dashboard(
         "therapist_name": current_user.full_name,
         "total_children": len(children),
         "total_sessions": total_sessions,
+        "sessions_this_week": sessions_this_week,
+        "total_modules": total_modules,
         "recent_sessions": recent_sessions,
         "children": [
             {
@@ -155,21 +175,23 @@ async def create_note(
     if not child:
         raise HTTPException(status_code=404, detail="Child not found or not assigned to you")
 
-    # Get therapist profile
-    prof_result = await db.execute(
-        select(TherapistProfile).where(TherapistProfile.user_id == current_user.id)
-    )
-    profile = prof_result.scalar_one_or_none()
-    if not profile:
-        raise HTTPException(status_code=400, detail="Therapist profile not found")
-
     note = TherapistNote(
-        therapist_id=profile.id,
+        therapist_id=current_user.id,
         child_id=child.id,
         content=body.content,
         note_type=body.note_type,
     )
     db.add(note)
+
+    await notify(
+        db,
+        user_id=child.parent_id,
+        type=NotificationType.new_note,
+        title=f"New note about {child.name}",
+        body=body.content[:200],
+        deep_link=f"/children/{child.id}",
+    )
+
     await db.commit()
     await db.refresh(note)
 
@@ -195,16 +217,11 @@ async def get_child_notes(
     if not child_result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Child not found")
 
-    prof_result = await db.execute(
-        select(TherapistProfile).where(TherapistProfile.user_id == current_user.id)
-    )
-    profile = prof_result.scalar_one_or_none()
-
     result = await db.execute(
         select(TherapistNote)
         .where(
             TherapistNote.child_id == child_id,
-            TherapistNote.therapist_id == profile.id,
+            TherapistNote.therapist_id == current_user.id,
         )
         .order_by(TherapistNote.created_at.desc())
     )
@@ -243,7 +260,8 @@ async def assign_program(
     module_result = await db.execute(
         select(TherapyModule).where(TherapyModule.id == UUID(body.module_id))
     )
-    if not module_result.scalar_one_or_none():
+    module = module_result.scalar_one_or_none()
+    if not module:
         raise HTTPException(status_code=404, detail="Module not found")
 
     # target_sessions_per_week has no dedicated column on assigned_programs (see
@@ -257,6 +275,16 @@ async def assign_program(
         notes=f"target_sessions_per_week={body.target_sessions_per_week}",
     )
     db.add(program)
+
+    await notify(
+        db,
+        user_id=child.parent_id,
+        type=NotificationType.program_assigned,
+        title=f"New program assigned to {child.name}",
+        body=f"'{module.title}' has been assigned — {body.target_sessions_per_week}x/week.",
+        deep_link=f"/children/{child.id}",
+    )
+
     await db.commit()
     await db.refresh(program)
 

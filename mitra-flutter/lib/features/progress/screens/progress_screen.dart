@@ -7,8 +7,8 @@ import '../../../theme/app_theme.dart';
 import '../../../data/models/models.dart';
 import '../../../data/services/api_service.dart';
 
-final progressSummaryProvider = FutureProvider.family<ProgressSummary, String>((ref, childId) {
-  return ref.watch(apiServiceProvider).getProgressSummary(childId);
+final progressSummaryProvider = FutureProvider.family<ProgressBundle, String>((ref, childId) {
+  return ref.watch(apiServiceProvider).getFullProgress(childId);
 });
 
 class ProgressScreen extends ConsumerWidget {
@@ -95,7 +95,7 @@ class ProgressScreen extends ConsumerWidget {
                         ],
                       ),
                     ),
-                    data: (summary) => _ProgressBody(summary: summary),
+                    data: (bundle) => _ProgressBody(bundle: bundle),
                   ),
                 ),
               ),
@@ -108,22 +108,26 @@ class ProgressScreen extends ConsumerWidget {
 }
 
 class _ProgressBody extends StatelessWidget {
-  final ProgressSummary summary;
-  const _ProgressBody({required this.summary});
+  final ProgressBundle bundle;
+  const _ProgressBody({required this.bundle});
 
   @override
   Widget build(BuildContext context) {
+    final summary = bundle.summary;
+    final overallMastery = summary.overallAverageScore ?? 0;
+    final avgScore = summary.overallAttemptAverage ?? 0;
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
       children: [
         // Stats row
         Row(
           children: [
-            _StatCard(value: '${summary.overallMastery.toInt()}%', label: 'Mastery', color: AppColors.green, emoji: '🎯'),
+            _StatCard(value: '${overallMastery.toInt()}%', label: 'Mastery', color: AppColors.green, emoji: '🎯'),
             const SizedBox(width: 12),
             _StatCard(value: '${summary.totalSessions}', label: 'Sessions', color: AppColors.teal, emoji: '🗓️'),
             const SizedBox(width: 12),
-            _StatCard(value: '${summary.currentStreak}🔥', label: 'Streak', color: AppColors.sunny, emoji: ''),
+            _StatCard(value: '${bundle.streak.currentStreak}🔥', label: 'Streak', color: AppColors.sunny, emoji: ''),
           ],
         ).animate().fadeIn(duration: 400.ms),
         const SizedBox(height: 20),
@@ -151,7 +155,7 @@ class _ProgressBody extends StatelessWidget {
                     ),
                     child: Center(
                       child: Text(
-                        '${summary.avgScore.toInt()}',
+                        '${avgScore.toInt()}',
                         style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.w900),
                       ),
                     ),
@@ -169,10 +173,10 @@ class _ProgressBody extends StatelessWidget {
                         ClipRRect(
                           borderRadius: BorderRadius.circular(8),
                           child: LinearProgressIndicator(
-                            value: summary.avgScore / 100,
+                            value: avgScore / 100,
                             backgroundColor: AppColors.surfaceBg,
                             valueColor: AlwaysStoppedAnimation<Color>(
-                              summary.avgScore >= 80 ? AppColors.green : summary.avgScore >= 50 ? AppColors.sunny : Colors.red,
+                              avgScore >= 80 ? AppColors.green : avgScore >= 50 ? AppColors.sunny : Colors.red,
                             ),
                             minHeight: 10,
                           ),
@@ -187,7 +191,7 @@ class _ProgressBody extends StatelessWidget {
         ).animate(delay: 150.ms).fadeIn().slideY(begin: 0.08),
         const SizedBox(height: 20),
         // Timeseries chart
-        if (summary.timeseries.isNotEmpty) ...[
+        if (bundle.timeseries.isNotEmpty) ...[
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -226,7 +230,7 @@ class _ProgressBody extends StatelessWidget {
                       maxY: 100,
                       lineBarsData: [
                         LineChartBarData(
-                          spots: summary.timeseries.asMap().entries.map((e) {
+                          spots: bundle.timeseries.asMap().entries.map((e) {
                             return FlSpot(e.key.toDouble(), e.value.score);
                           }).toList(),
                           isCurved: true,
@@ -252,10 +256,10 @@ class _ProgressBody extends StatelessWidget {
           const SizedBox(height: 20),
         ],
         // By module
-        if (summary.byModule.isNotEmpty) ...[
+        if (summary.moduleProgress.isNotEmpty) ...[
           const Text('By Module', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
           const SizedBox(height: 12),
-          ...summary.byModule.asMap().entries.map((entry) {
+          ...summary.moduleProgress.asMap().entries.map((entry) {
             final i = entry.key;
             final m = entry.value;
             final grad = AppColors.lessonGradients[i % AppColors.lessonGradients.length];
@@ -279,23 +283,23 @@ class _ProgressBody extends StatelessWidget {
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: Text(m.moduleTitle, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.textPrimary)),
+                          child: Text(m.moduleName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.textPrimary)),
                         ),
-                        Text('${m.mastery.toInt()}%', style: TextStyle(fontWeight: FontWeight.w800, color: grad.first, fontSize: 16)),
+                        Text('${m.masteryScore.toInt()}%', style: TextStyle(fontWeight: FontWeight.w800, color: grad.first, fontSize: 16)),
                       ],
                     ),
                     const SizedBox(height: 10),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(6),
                       child: LinearProgressIndicator(
-                        value: m.mastery / 100,
+                        value: m.masteryScore / 100,
                         backgroundColor: AppColors.surfaceBg,
                         valueColor: AlwaysStoppedAnimation<Color>(grad.first),
                         minHeight: 8,
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Text('${m.attempts} attempts • ${m.mastered} mastered', style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
+                    Text('${m.sessionCount} sessions • ${m.itemsMastered} mastered', style: const TextStyle(color: AppColors.textMuted, fontSize: 12)),
                   ],
                 ),
               ).animate(delay: Duration(milliseconds: 400 + 100 * i)).fadeIn().slideX(begin: 0.05),

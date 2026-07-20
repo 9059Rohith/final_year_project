@@ -150,49 +150,43 @@ class ModuleItem {
 // ── Assigned Program ──────────────────────────────────────────────────────────
 class AssignedProgram {
   final String id;
-  final String childId;
   final String moduleId;
   final String moduleTitle;
-  final String status;
+  final String? moduleDescription;
+  final String? difficultyLevel;
+  final bool isActive;
   final int? targetSessionsPerWeek;
-  final String? notes;
+  final double? masteryScore;
+  final String? trend;
 
   const AssignedProgram({
     required this.id,
-    required this.childId,
     required this.moduleId,
     required this.moduleTitle,
-    required this.status,
+    this.moduleDescription,
+    this.difficultyLevel,
+    required this.isActive,
     this.targetSessionsPerWeek,
-    this.notes,
+    this.masteryScore,
+    this.trend,
   });
 
+  // Matches parent.py's get_programs_for_child response shape exactly:
+  // {id, module_id, module_name, module_description, difficulty_level,
+  //  is_active, target_sessions_per_week, mastery_score, trend}
   factory AssignedProgram.fromJson(Map<String, dynamic> j) => AssignedProgram(
         id: j['id'] ?? '',
-        childId: j['child_id'] ?? '',
         moduleId: j['module_id'] ?? '',
-        moduleTitle: j['module_title'] ?? j['title'] ?? '',
-        status: j['status'] ?? 'not_started',
+        moduleTitle: j['module_name'] ?? '',
+        moduleDescription: j['module_description'],
+        difficultyLevel: j['difficulty_level'],
+        isActive: j['is_active'] ?? true,
         targetSessionsPerWeek: j['target_sessions_per_week'],
-        notes: j['notes'],
+        masteryScore: (j['mastery_score'] as num?)?.toDouble(),
+        trend: j['trend'],
       );
 
-  bool get isActive => status == 'in_progress' || status == 'not_started';
-
-  String get statusLabel {
-    switch (status) {
-      case 'not_started':
-        return 'Start Now';
-      case 'in_progress':
-        return 'Continue';
-      case 'completed':
-        return 'Completed ✓';
-      case 'paused':
-        return 'Paused';
-      default:
-        return 'Start';
-    }
-  }
+  String get statusLabel => isActive ? 'Start' : 'Completed ✓';
 }
 
 // ── Session ───────────────────────────────────────────────────────────────────
@@ -240,7 +234,9 @@ class AttemptResult {
 
   factory AttemptResult.fromJson(Map<String, dynamic> j) => AttemptResult(
         attemptId: j['attempt_id'] ?? j['id'] ?? '',
-        status: j['status'] ?? 'pending',
+        // Backend field is `scoring_status`, not `status` — without this
+        // fallback, polling never detects "done" and always times out.
+        status: j['status'] ?? j['scoring_status'] ?? 'pending',
         score: (j['score'] as num?)?.toDouble() ??
             (j['similarity_score'] as num?)?.toDouble(),
         transcript: j['transcript'] ?? j['asr_transcript'],
@@ -252,67 +248,91 @@ class AttemptResult {
 }
 
 // ── Progress ──────────────────────────────────────────────────────────────────
+// The backend splits progress across 4 separate endpoints — summary,
+// timeseries, by-module, and streaks — rather than one combined payload.
+// These four classes match each endpoint's actual response exactly;
+// ProgressBundle (below) combines them for the screen.
+
 class ProgressSummary {
   final String childId;
   final String childName;
-  final double overallMastery;
   final int totalSessions;
+  final int completedSessions;
+  final double? overallAverageScore;
+  final double? overallAttemptAverage;
+  final int sessionsThisWeek;
   final int totalAttempts;
-  final double avgScore;
-  final int currentStreak;
-  final List<ProgressByModule> byModule;
-  final List<TimeseriesPoint> timeseries;
+  final List<ModuleProgress> moduleProgress;
 
   const ProgressSummary({
     required this.childId,
     required this.childName,
-    required this.overallMastery,
     required this.totalSessions,
+    required this.completedSessions,
+    this.overallAverageScore,
+    this.overallAttemptAverage,
+    required this.sessionsThisWeek,
     required this.totalAttempts,
-    required this.avgScore,
-    required this.currentStreak,
-    this.byModule = const [],
-    this.timeseries = const [],
+    this.moduleProgress = const [],
   });
 
   factory ProgressSummary.fromJson(Map<String, dynamic> j) => ProgressSummary(
         childId: j['child_id'] ?? '',
         childName: j['child_name'] ?? '',
-        overallMastery: (j['overall_mastery'] as num?)?.toDouble() ?? 0,
         totalSessions: j['total_sessions'] ?? 0,
+        completedSessions: j['completed_sessions'] ?? 0,
+        overallAverageScore: (j['overall_average_score'] as num?)?.toDouble(),
+        overallAttemptAverage: (j['overall_attempt_average'] as num?)?.toDouble(),
+        sessionsThisWeek: j['sessions_this_week'] ?? 0,
         totalAttempts: j['total_attempts'] ?? 0,
-        avgScore: (j['avg_score'] as num?)?.toDouble() ?? 0,
-        currentStreak: j['current_streak'] ?? 0,
-        byModule: (j['by_module'] as List<dynamic>? ?? [])
-            .map((e) => ProgressByModule.fromJson(e))
-            .toList(),
-        timeseries: (j['timeseries'] as List<dynamic>? ?? [])
-            .map((e) => TimeseriesPoint.fromJson(e))
+        moduleProgress: (j['module_progress'] as List<dynamic>? ?? [])
+            .map((e) => ModuleProgress.fromJson(e as Map<String, dynamic>))
             .toList(),
       );
 }
 
-class ProgressByModule {
+class ModuleProgress {
   final String moduleId;
-  final String moduleTitle;
-  final double mastery;
-  final int attempts;
-  final int mastered;
+  final String moduleName;
+  final double masteryScore;
+  final String trend;
+  final int itemsMastered;
+  final int sessionCount;
 
-  const ProgressByModule({
+  const ModuleProgress({
     required this.moduleId,
-    required this.moduleTitle,
-    required this.mastery,
-    required this.attempts,
-    required this.mastered,
+    required this.moduleName,
+    required this.masteryScore,
+    required this.trend,
+    required this.itemsMastered,
+    required this.sessionCount,
   });
 
-  factory ProgressByModule.fromJson(Map<String, dynamic> j) => ProgressByModule(
+  factory ModuleProgress.fromJson(Map<String, dynamic> j) => ModuleProgress(
         moduleId: j['module_id'] ?? '',
-        moduleTitle: j['module_title'] ?? '',
-        mastery: (j['mastery'] as num?)?.toDouble() ?? 0,
-        attempts: j['attempts'] ?? 0,
-        mastered: j['mastered'] ?? 0,
+        moduleName: j['module_name'] ?? '',
+        masteryScore: (j['mastery_score'] as num?)?.toDouble() ?? 0,
+        trend: j['trend'] ?? 'stable',
+        itemsMastered: j['items_mastered'] ?? 0,
+        sessionCount: j['session_count'] ?? 0,
+      );
+}
+
+class StreakInfo {
+  final int currentStreak;
+  final int bestStreak;
+  final int totalPracticeDays;
+
+  const StreakInfo({
+    required this.currentStreak,
+    required this.bestStreak,
+    required this.totalPracticeDays,
+  });
+
+  factory StreakInfo.fromJson(Map<String, dynamic> j) => StreakInfo(
+        currentStreak: j['current_streak'] ?? 0,
+        bestStreak: j['best_streak'] ?? 0,
+        totalPracticeDays: j['total_practice_days'] ?? 0,
       );
 }
 
@@ -329,9 +349,23 @@ class TimeseriesPoint {
 
   factory TimeseriesPoint.fromJson(Map<String, dynamic> j) => TimeseriesPoint(
         date: DateTime.tryParse(j['date'] ?? '') ?? DateTime.now(),
-        score: (j['score'] as num?)?.toDouble() ?? 0,
-        sessions: j['sessions'] ?? 0,
+        score: (j['average_score'] as num?)?.toDouble() ?? 0,
+        sessions: j['session_count'] ?? 0,
       );
+}
+
+/// Combines the 4 separate progress endpoints for the progress screen —
+/// fetched together via ApiService.getFullProgress().
+class ProgressBundle {
+  final ProgressSummary summary;
+  final StreakInfo streak;
+  final List<TimeseriesPoint> timeseries;
+
+  const ProgressBundle({
+    required this.summary,
+    required this.streak,
+    required this.timeseries,
+  });
 }
 
 // ── Notification ──────────────────────────────────────────────────────────────

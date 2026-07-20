@@ -14,11 +14,13 @@ from sqlalchemy import select
 from ..database import get_db
 from ..models.user import User, UserRole
 from ..models.child import Child
-from ..models.content import ModuleItem
+from ..models.content import ModuleItem, TherapyModule
 from ..models.program import AssignedProgram, ProgramStatus
 from ..models.session import TherapySession, SessionAttempt, SessionStatus, MitraResponseType
+from ..models.social import NotificationType
 from ..config import settings
 from ..utils.jwt_handler import get_current_user
+from ..utils.notifications import notify
 
 router = APIRouter()
 
@@ -30,6 +32,15 @@ class SessionCreate(BaseModel):
     program_id: str
 
 
+class SessionItemOut(BaseModel):
+    id: str
+    tamil_word: str
+    transliteration: Optional[str]
+    english_translation: Optional[str]
+    image_url: Optional[str]
+    phoneme_breakdown: Optional[dict]
+
+
 class SessionResponse(BaseModel):
     id: str
     child_id: str
@@ -39,6 +50,11 @@ class SessionResponse(BaseModel):
     completed_items: int
     average_score: Optional[float]
     created_at: str
+    # Populated on create_session — the practice screen needs the full word
+    # list up front, since it drives the whole session client-side.
+    child_name: Optional[str] = None
+    module_name: Optional[str] = None
+    items: List[SessionItemOut] = []
 
 
 class AttemptStatusResponse(BaseModel):
@@ -91,9 +107,17 @@ async def create_session(
     if program.status == ProgramStatus.not_started:
         program.status = ProgramStatus.in_progress
 
-    # Count items in the module
+    # Module + ordered items — the practice screen needs the full word list
+    # up front, since it drives the whole session client-side from here on.
+    module_result = await db.execute(
+        select(TherapyModule).where(TherapyModule.id == program.module_id)
+    )
+    module = module_result.scalar_one_or_none()
+
     items_result = await db.execute(
-        select(ModuleItem).where(ModuleItem.module_id == program.module_id)
+        select(ModuleItem)
+        .where(ModuleItem.module_id == program.module_id, ModuleItem.is_active == True)
+        .order_by(ModuleItem.order_index)
     )
     items = items_result.scalars().all()
 
@@ -118,6 +142,19 @@ async def create_session(
         completed_items=session.completed_items,
         average_score=session.average_score,
         created_at=session.created_at.isoformat(),
+        child_name=child.name,
+        module_name=module.title if module else None,
+        items=[
+            SessionItemOut(
+                id=str(item.id),
+                tamil_word=item.target_word,
+                transliteration=item.transliteration,
+                english_translation=item.meaning,
+                image_url=item.image_url,
+                phoneme_breakdown=item.phoneme_breakdown,
+            )
+            for item in items
+        ],
     )
 
 
@@ -159,7 +196,7 @@ async def complete_session(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    await _verify_child_belongs_to_user(session.child_id, current_user, db)
+    child = await _verify_child_belongs_to_user(session.child_id, current_user, db)
 
     # Compute average score from done attempts
     attempts_result = await db.execute(
@@ -182,6 +219,16 @@ async def complete_session(
         )
         item = item_res.scalar_one_or_none()
         session.best_word = item.target_word if item else None
+
+    score_text = f"{session.average_score:.0f}%" if session.average_score is not None else "no score yet"
+    await notify(
+        db,
+        user_id=child.parent_id,
+        type=NotificationType.session_completed,
+        title=f"{child.name} finished a practice session",
+        body=f"Average score: {score_text} across {session.completed_items} word(s).",
+        deep_link=f"/children/{child.id}",
+    )
 
     await db.commit()
     return {"status": "completed", "average_score": session.average_score}

@@ -93,9 +93,9 @@ class _ChildDetailBody extends ConsumerWidget {
                         ),
                       ).animate().scale(curve: Curves.elasticOut, duration: 600.ms),
                       const SizedBox(height: 12),
-                      Text(
-                        '${programs.isNotEmpty ? programs.first.childId.substring(0, 4).toUpperCase() : "CHILD"} Profile',
-                        style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800),
+                      const Text(
+                        'Child Profile',
+                        style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800),
                       ),
                     ],
                   ),
@@ -274,7 +274,7 @@ class _ProgramCard extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          _StatusBadge(status: program.status),
+                          _StatusBadge(isActive: program.isActive),
                         ],
                       ),
                     ),
@@ -304,36 +304,17 @@ class _ProgramCard extends StatelessWidget {
 }
 
 class _StatusBadge extends StatelessWidget {
-  final String status;
-  const _StatusBadge({required this.status});
+  // The backend only exposes a boolean (is_active — not_started/in_progress
+  // collapsed together), not the underlying 3-way status enum, so that's all
+  // this can honestly render.
+  final bool isActive;
+  const _StatusBadge({required this.isActive});
 
   @override
   Widget build(BuildContext context) {
-    Color bg;
-    Color text;
-    String label;
-
-    switch (status) {
-      case 'in_progress':
-        bg = AppColors.primaryLight.withOpacity(0.2);
-        text = AppColors.primaryDark;
-        label = '● In Progress';
-        break;
-      case 'completed':
-        bg = AppColors.greenLight;
-        text = AppColors.green;
-        label = '✓ Completed';
-        break;
-      case 'not_started':
-        bg = AppColors.sunnyLight;
-        text = AppColors.sunny;
-        label = '◎ Not Started';
-        break;
-      default:
-        bg = AppColors.surfaceBg;
-        text = AppColors.textMuted;
-        label = status;
-    }
+    final bg = isActive ? AppColors.primaryLight.withOpacity(0.2) : AppColors.greenLight;
+    final text = isActive ? AppColors.primaryDark : AppColors.green;
+    final label = isActive ? '● Active' : '✓ Completed';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

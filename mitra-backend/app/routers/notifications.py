@@ -32,8 +32,9 @@ async def list_notifications(
             "id": str(n.id),
             "title": n.title,
             "body": n.body,
-            "notification_type": n.notification_type,
+            "notification_type": n.type.value,
             "is_read": n.is_read,
+            "deep_link": n.deep_link,
             "created_at": n.created_at.isoformat() if n.created_at else None,
         }
         for n in notifications

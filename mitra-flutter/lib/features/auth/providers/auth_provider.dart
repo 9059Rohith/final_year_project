@@ -29,6 +29,9 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       state = AsyncValue.data(user);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
+      // Without this, the caller's try/catch never fires on a real failure —
+      // the login screen would silently stop loading with no error shown.
+      rethrow;
     }
   }
 
@@ -55,6 +58,9 @@ class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
       state = AsyncValue.data(user);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
+      // Same reasoning as login() — the register screen's try/catch needs
+      // this to actually see the failure and show an error to the user.
+      rethrow;
     }
   }
 

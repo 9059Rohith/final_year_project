@@ -23,10 +23,12 @@ class TherapistNote(Base, UUIDMixin, TimestampMixin):
     therapist_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     child_id = Column(UUID(as_uuid=True), ForeignKey("children.id", ondelete="CASCADE"), nullable=False, index=True)
     content = Column(Text, nullable=False)
+    note_type = Column(String(20), default="general", nullable=False)  # general | milestone | concern
     is_private = Column(Boolean, default=False)  # Private = therapist only; False = visible to parent
 
     # Relationships
-    therapist = relationship("TherapistProfile", back_populates="notes", foreign_keys=[therapist_id])
+    # therapist_id FKs to users.id (see migration 0001), not therapist_profiles.id.
+    therapist = relationship("User", foreign_keys=[therapist_id])
     child = relationship("Child", back_populates="therapist_notes")
 
 
@@ -56,7 +58,9 @@ class Notification(Base, UUIDMixin, TimestampMixin):
     body = Column(Text, nullable=True)
     is_read = Column(Boolean, default=False, nullable=False)
     deep_link = Column(String(500), nullable=True)
-    metadata = Column(JSON, nullable=True)  # Extra context for the notification
+    # `metadata` is reserved by SQLAlchemy's Declarative Base — the DB column
+    # stays "metadata" (per migration 0001), only the Python attribute differs.
+    notification_metadata = Column("metadata", JSON, nullable=True)
 
     # Relationships
     user = relationship("User", back_populates="notifications")

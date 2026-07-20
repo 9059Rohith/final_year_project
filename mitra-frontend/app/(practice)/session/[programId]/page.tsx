@@ -93,7 +93,8 @@ export default function SessionPage() {
     try {
       const formData = new FormData();
       formData.append("audio", blob, "recording.webm");
-      formData.append("item_id", currentItem.id);
+      formData.append("module_item_id", currentItem.id);
+      formData.append("mimic_played", "true");
 
       const res = await sessionsApi.submitAttempt(session.id, formData);
       const attemptId = res.data.attempt_id;
@@ -113,13 +114,13 @@ export default function SessionPage() {
       tries++;
       try {
         const res = await sessionsApi.getAttemptStatus(sessionId, attemptId);
-        const { status, score, transcript, mitra_response_type } = res.data;
-        if (status === "done") {
+        const { scoring_status, similarity_score, asr_transcript, mitra_response_type } = res.data;
+        if (scoring_status === "done") {
           clearInterval(pollRef.current!);
-          setLastAttempt({ attempt_id: attemptId, score, transcript, mitra_response: mitra_response_type });
-          setScores((s) => [...s, score ?? 0]);
+          setLastAttempt({ attempt_id: attemptId, score: similarity_score, transcript: asr_transcript, mitra_response: mitra_response_type });
+          setScores((s) => [...s, similarity_score ?? 0]);
           setPhase("scored");
-        } else if (status === "failed" || tries > 30) {
+        } else if (scoring_status === "failed" || tries > 30) {
           clearInterval(pollRef.current!);
           setPhase("scored");
           setLastAttempt({ attempt_id: attemptId, score: 0, mitra_response: "gentle_correct" });

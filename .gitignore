@@ -22,3 +22,4 @@ mitra-flutter/.dart_tool/
 mitra-flutter/ios/Pods/
 *.log
 mitra-flutter/android/.gradle/
+.claude/

@@ -7,6 +7,7 @@ import '../../../core/router.dart';
 import '../../../data/models/models.dart';
 import '../../../data/services/api_service.dart';
 import '../../../features/auth/providers/auth_provider.dart';
+import '../../../shared/widgets/gradient_button.dart';
 
 final therapistDashboardProvider = FutureProvider<Map<String, dynamic>>((ref) {
   return ref.watch(apiServiceProvider).getTherapistDashboard();
@@ -130,7 +131,7 @@ class TherapistDashboardScreen extends ConsumerWidget {
                             emoji: '👶',
                             label: 'Assign\nProgram',
                             colors: AppColors.playGradient,
-                            onTap: () {},
+                            onTap: () => _showAssignProgramSheet(context, ref),
                           ),
                         ],
                       ).animate(delay: 150.ms).fadeIn(),
@@ -303,6 +304,129 @@ class _PatientCard extends StatelessWidget {
     ).animate(delay: Duration(milliseconds: 100 * index)).fadeIn().slideX(begin: 0.05);
   }
 }
+
+void _showAssignProgramSheet(BuildContext context, WidgetRef ref) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => const _AssignProgramSheet(),
+  );
+}
+
+class _AssignProgramSheet extends ConsumerStatefulWidget {
+  const _AssignProgramSheet();
+
+  @override
+  ConsumerState<_AssignProgramSheet> createState() => _AssignProgramSheetState();
+}
+
+class _AssignProgramSheetState extends ConsumerState<_AssignProgramSheet> {
+  String? _childId;
+  String? _moduleId;
+  bool _submitting = false;
+
+  Future<void> _submit() async {
+    if (_childId == null || _moduleId == null) return;
+    setState(() => _submitting = true);
+    try {
+      await ref.read(apiServiceProvider).assignProgram(
+            childId: _childId!,
+            moduleId: _moduleId!,
+          );
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Program assigned ✓')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _submitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to assign program.')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final childrenAsync = ref.watch(therapistChildrenProvider);
+    final modulesAsync = ref.watch(_assignableModulesProvider);
+
+    return Container(
+      padding: EdgeInsets.only(
+        left: 20, right: 20, top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Assign Program', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+          const SizedBox(height: 16),
+          const Text('Patient', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+          const SizedBox(height: 6),
+          childrenAsync.when(
+            loading: () => const LinearProgressIndicator(),
+            error: (_, __) => const Text('Failed to load patients'),
+            data: (children) => DropdownButtonFormField<String>(
+              value: _childId,
+              hint: const Text('Select a patient'),
+              isExpanded: true,
+              items: children
+                  .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
+                  .toList(),
+              onChanged: (v) => setState(() => _childId = v),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: AppColors.surfaceBg,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text('Module', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary)),
+          const SizedBox(height: 6),
+          modulesAsync.when(
+            loading: () => const LinearProgressIndicator(),
+            error: (_, __) => const Text('Failed to load modules'),
+            data: (modules) => DropdownButtonFormField<String>(
+              value: _moduleId,
+              hint: const Text('Select a published module'),
+              isExpanded: true,
+              items: modules
+                  .map((m) => DropdownMenuItem(value: m.id, child: Text(m.title)))
+                  .toList(),
+              onChanged: (v) => setState(() => _moduleId = v),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: AppColors.surfaceBg,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          GradientButton(
+            label: _submitting ? 'Assigning...' : 'Assign',
+            gradient: const LinearGradient(colors: AppColors.playGradient),
+            onTap: (_childId == null || _moduleId == null || _submitting) ? null : _submit,
+            isLoading: _submitting,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+final _assignableModulesProvider = FutureProvider<List<TherapyModule>>((ref) {
+  return ref.watch(apiServiceProvider).getModules(publishedOnly: true);
+});
 
 class _EmptyPatients extends StatelessWidget {
   @override

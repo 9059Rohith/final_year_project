@@ -18,10 +18,14 @@ if config.config_file_name is not None:
 
 target_metadata = Base.metadata
 
-# Override sqlalchemy.url from environment if set
-DATABASE_URL = os.environ.get("SYNC_DATABASE_URL") or os.environ.get(
-    "DATABASE_URL", "postgresql://mitra:mitrapass@localhost:5432/mitradb"
-).replace("+asyncpg", "")
+# Migrations run through async_engine_from_config() below, which requires an
+# async-driver URL (postgresql+asyncpg://...) — NOT SYNC_DATABASE_URL, and do
+# NOT strip "+asyncpg". Using the sync URL here made `alembic upgrade head`
+# fail immediately (async engine + sync dialect), so the schema never got
+# created at all.
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL", "postgresql+asyncpg://mitra:mitrapass@localhost:5432/mitradb"
+)
 config.set_main_option("sqlalchemy.url", DATABASE_URL)
 
 

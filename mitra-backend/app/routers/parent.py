@@ -11,7 +11,7 @@ from ..models.user import User, UserRole, ParentProfile
 from ..models.child import Child
 from ..models.program import AssignedProgram, ProgramStatus
 from ..models.session import TherapySession, ProgressSnapshot
-from ..models.content import TherapyModule, ModuleItem
+from ..models.content import TherapyModule
 from ..utils.jwt_handler import require_role
 
 router = APIRouter()
@@ -76,13 +76,27 @@ async def parent_dashboard(
     }
 
 
+def _parse_target_sessions_per_week(notes: Optional[str]) -> int:
+    """target_sessions_per_week has no dedicated column — it's stashed in `notes`
+    as 'target_sessions_per_week=N' by therapist.py's assign_program. Parse it
+    back out; default to 3 if missing/unparseable (matches the request default)."""
+    if notes:
+        for part in notes.split(";"):
+            if part.strip().startswith("target_sessions_per_week="):
+                try:
+                    return int(part.strip().split("=", 1)[1])
+                except ValueError:
+                    pass
+    return 3
+
+
 @router.get("/children/{child_id}/programs")
 async def get_programs_for_child(
     child_id: UUID,
     current_user: User = Depends(require_role("parent")),
     db: AsyncSession = Depends(get_db),
 ):
-    """Get all active programs for a child, with module details and items."""
+    """Programs assigned to a child — shape matches the frontend's Program contract."""
     child_result = await db.execute(
         select(Child).where(Child.id == child_id, Child.parent_id == current_user.id)
     )
@@ -91,10 +105,7 @@ async def get_programs_for_child(
         raise HTTPException(status_code=404, detail="Child not found")
 
     prog_result = await db.execute(
-        select(AssignedProgram).where(
-            AssignedProgram.child_id == child.id,
-            AssignedProgram.status.in_([ProgramStatus.not_started, ProgramStatus.in_progress]),
-        )
+        select(AssignedProgram).where(AssignedProgram.child_id == child.id)
     )
     programs = prog_result.scalars().all()
 
@@ -107,35 +118,30 @@ async def get_programs_for_child(
         if not module:
             continue
 
-        items_result = await db.execute(
-            select(ModuleItem)
-            .where(ModuleItem.module_id == module.id)
-            .order_by(ModuleItem.order_index)
+        snap_result = await db.execute(
+            select(ProgressSnapshot)
+            .where(
+                ProgressSnapshot.child_id == child.id,
+                ProgressSnapshot.module_id == module.id,
+            )
+            .order_by(ProgressSnapshot.snapshot_date.desc())
+            .limit(1)
         )
-        items = items_result.scalars().all()
+        snap = snap_result.scalar_one_or_none()
 
         out.append({
-            "program_id": str(p.id),
+            "id": str(p.id),
             "module_id": str(module.id),
             "module_name": module.title,
             "module_description": module.description,
-            "module_level": module.difficulty.value,
-            "status": p.status.value,
-            "item_count": len(items),
-            "items": [
-                {
-                    "id": str(item.id),
-                    "tamil_word": item.target_word,
-                    "transliteration": item.transliteration,
-                    "english_translation": item.meaning,
-                    "image_url": item.image_url,
-                    "order_index": item.order_index,
-                }
-                for item in items
-            ],
+            "difficulty_level": module.difficulty.value,
+            "is_active": p.status in (ProgramStatus.not_started, ProgramStatus.in_progress),
+            "target_sessions_per_week": _parse_target_sessions_per_week(p.notes),
+            "mastery_score": snap.mastery_score if snap else None,
+            "trend": snap.trend if snap else None,
         })
 
-    return out
+    return {"child_name": child.name, "programs": out}
 
 
 @router.get("/children/{child_id}/progress")

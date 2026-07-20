@@ -206,24 +206,32 @@ async def seed(session: AsyncSession) -> None:
     # 4. Children
     child_ids = []
     children_data = [
-        {"name": "Arjun Rajan",  "dob": date(2018, 3, 15),  "avatar": "avatar1", "p": 0, "t": 0},
-        {"name": "Kavya Rajan",  "dob": date(2020, 7, 22),  "avatar": "avatar2", "p": 0, "t": 0},
-        {"name": "Rohit Kumar",  "dob": date(2017, 11, 3),  "avatar": "avatar3", "p": 1, "t": 1},
-        {"name": "Divya Kumar",  "dob": date(2019, 5, 18),  "avatar": "avatar4", "p": 1, "t": 0},
-        {"name": "Ananya Iyer",  "dob": date(2018, 9, 30),  "avatar": "avatar5", "p": 2, "t": 1},
+        {"name": "Arjun Rajan",  "dob": date(2018, 3, 15),  "avatar": "avatar1", "gender": "male",   "color": "#F97316", "p": 0, "t": 0},
+        {"name": "Kavya Rajan",  "dob": date(2020, 7, 22),  "avatar": "avatar2", "gender": "female", "color": "#EC4899", "p": 0, "t": 0},
+        {"name": "Rohit Kumar",  "dob": date(2017, 11, 3),  "avatar": "avatar3", "gender": "male",   "color": "#3B82F6", "p": 1, "t": 1},
+        {"name": "Divya Kumar",  "dob": date(2019, 5, 18),  "avatar": "avatar4", "gender": "female", "color": "#8B5CF6", "p": 1, "t": 0},
+        {"name": "Ananya Iyer",  "dob": date(2018, 9, 30),  "avatar": "avatar5", "gender": "female", "color": "#10B981", "p": 2, "t": 1},
     ]
+
+    def _age_from_dob(dob: date) -> int:
+        today = date.today()
+        return today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+
     for c in children_data:
         cid = uuid.uuid4()
         child_ids.append(cid)
         prefs = json.dumps({"reduce_motion": False, "mute_sudden_sounds": False, "font_size": "medium"})
         await session.execute(text("""
-            INSERT INTO children (id, parent_id, therapist_id, name, date_of_birth, avatar, language,
-                                  sensory_prefs, parent_consent_given, consent_timestamp, is_active, created_at, updated_at)
-            VALUES (:id, :pid, :tid, :name, :dob, :avatar, 'ta',
-                    cast(:prefs as json), true, now(), true, now(), now())
+            INSERT INTO children (id, parent_id, therapist_id, name, age, gender, avatar_color,
+                                  date_of_birth, avatar, language, sensory_prefs, parent_consent_given,
+                                  consent_timestamp, is_active, created_at, updated_at)
+            VALUES (:id, :pid, :tid, :name, :age, :gender, :color,
+                    :dob, :avatar, 'ta', cast(:prefs as json), true,
+                    now(), true, now(), now())
         """), {
             "id": cid, "pid": parent_ids[c["p"]], "tid": therapist_ids[c["t"]],
-            "name": c["name"], "dob": c["dob"], "avatar": c["avatar"], "prefs": prefs,
+            "name": c["name"], "age": _age_from_dob(c["dob"]), "gender": c["gender"], "color": c["color"],
+            "dob": c["dob"], "avatar": c["avatar"], "prefs": prefs,
         })
     await session.commit()
 

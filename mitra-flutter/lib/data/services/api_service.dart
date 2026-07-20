@@ -77,7 +77,9 @@ class ApiService {
   // ── Parent dashboard ────────────────────────────────────────────────────────
   Future<List<AssignedProgram>> getChildPrograms(String childId) async {
     final res = await _dio.get('/parent/children/$childId/programs');
-    final list = res.data as List<dynamic>;
+    // Response is {"child_name": ..., "programs": [...]}, not a bare list.
+    final data = res.data as Map<String, dynamic>;
+    final list = data['programs'] as List<dynamic>? ?? [];
     return list.map((e) => AssignedProgram.fromJson(e as Map<String, dynamic>)).toList();
   }
 
@@ -145,7 +147,8 @@ class ApiService {
   ) async {
     final formData = FormData.fromMap({
       'audio': await MultipartFile.fromFile(audioFilePath, filename: 'recording.m4a'),
-      'item_id': itemId,
+      'module_item_id': itemId,
+      'mimic_played': 'true',
     });
     final res = await _dio.post(
       '/sessions/$sessionId/attempts',
@@ -183,8 +186,30 @@ class ApiService {
       '/progress/child/$childId/timeseries',
       queryParameters: {'days': days},
     );
-    final list = res.data as List<dynamic>;
+    // Response is {"child_id", "days", "timeseries": [...]}, not a bare list.
+    final data = res.data as Map<String, dynamic>;
+    final list = data['timeseries'] as List<dynamic>? ?? [];
     return list.map((e) => TimeseriesPoint.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<StreakInfo> getStreaks(String childId) async {
+    final res = await _dio.get('/progress/child/$childId/streaks');
+    return StreakInfo.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  /// The progress screen needs summary + streak + timeseries together —
+  /// the backend exposes these as 3 separate endpoints, so fetch in parallel.
+  Future<ProgressBundle> getFullProgress(String childId, {int days = 14}) async {
+    final results = await Future.wait([
+      getProgressSummary(childId),
+      getStreaks(childId),
+      getTimeseries(childId, days: days),
+    ]);
+    return ProgressBundle(
+      summary: results[0] as ProgressSummary,
+      streak: results[1] as StreakInfo,
+      timeseries: results[2] as List<TimeseriesPoint>,
+    );
   }
 
   // ── Therapist ───────────────────────────────────────────────────────────────

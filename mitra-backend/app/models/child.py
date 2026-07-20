@@ -1,5 +1,5 @@
 """Child profile model."""
-from sqlalchemy import Column, String, Date, ForeignKey, JSON, Boolean, DateTime
+from sqlalchemy import Column, String, Integer, Text, Date, ForeignKey, JSON, Boolean, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from ..database import Base
@@ -14,6 +14,10 @@ class Child(Base, UUIDMixin, TimestampMixin):
     therapist_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
 
     name = Column(String(255), nullable=False)
+    age = Column(Integer, nullable=True)
+    gender = Column(String(20), nullable=True)
+    avatar_color = Column(String(20), default="#F97316", nullable=True)
+    diagnosis_notes = Column(Text, nullable=True)
     date_of_birth = Column(Date, nullable=True)
     avatar = Column(String(50), default="avatar1", nullable=False)  # avatar key e.g. "avatar1"
     language = Column(String(10), default="ta", nullable=False)
@@ -33,8 +37,8 @@ class Child(Base, UUIDMixin, TimestampMixin):
     is_active = Column(Boolean, default=True, nullable=False)
 
     # Relationships
-    parent = relationship("User", back_populates="parent_profile", foreign_keys=[parent_id], overlaps="children")
-    therapist = relationship("User", foreign_keys=[therapist_id], overlaps="children")
+    parent = relationship("User", foreign_keys=[parent_id])
+    therapist = relationship("User", foreign_keys=[therapist_id])
     assigned_programs = relationship("AssignedProgram", back_populates="child", cascade="all, delete-orphan")
     sessions = relationship("TherapySession", back_populates="child", cascade="all, delete-orphan")
     progress_snapshots = relationship("ProgressSnapshot", back_populates="child", cascade="all, delete-orphan")
