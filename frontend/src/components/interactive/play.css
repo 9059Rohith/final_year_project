@@ -127,3 +127,47 @@
   .play-card__capability { display: none; }
   .visual-schedule li:not(:first-child):not(.is-active):not(.is-complete) span:last-child { display: none; }
 }
+
+/* Breath Balloon voice arcade */
+.breath-game { width: min(920px, 100%); }
+.breath-card { display: grid; justify-items: center; gap: 20px; width: min(620px, 100%); margin: 0 auto; border: 1px solid #dbeafe; border-radius: 30px; padding: clamp(28px, 6vw, 52px); background: rgba(255,255,255,.95); box-shadow: 0 24px 64px rgba(30,64,175,.1); text-align: center; }
+.breath-card--intro { background: linear-gradient(145deg, #fff, #eff6ff); }
+.breath-card--complete { border-color: #a7f3d0; background: linear-gradient(145deg, #fff, #ecfdf5); }
+.breath-card__hero { display: grid; place-items: center; width: 108px; height: 108px; border-radius: 49% 51% 55% 45%; background: linear-gradient(145deg, #818cf8, #06b6d4); color: #fff; font-size: 2.5rem; font-weight: 900; box-shadow: 0 18px 34px rgba(79,70,229,.22); }
+.breath-card__hero svg { width: 48px; height: 48px; }
+.breath-card__hero--soft { background: linear-gradient(145deg, #fbbf24, #fb7185); }
+.breath-card__privacy { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; padding: 8px 13px; background: #ecfdf5; color: #047857; font-size: .8rem; font-weight: 800; }
+.breath-card__privacy svg { width: 17px; height: 17px; }
+.breath-card__note { max-width: 450px; color: #64748b; font-size: .86rem; }
+.breath-button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; border-radius: 16px; padding: 11px 20px; font-weight: 900; }
+.breath-button svg { width: 19px; height: 19px; }
+.breath-button--quiet { border: 2px solid #cbd5e1; background: #fff; color: #334155; }
+.breath-button--stop { background: #fff1f2; color: #be123c; box-shadow: inset 0 0 0 2px #fecdd3; }
+.breath-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.calibration-orb { width: 130px; height: 130px; border: 10px solid rgba(255,255,255,.82); border-radius: 50%; background: radial-gradient(circle, #67e8f9 0 calc(var(--sound-level) * 55%), #e0e7ff calc(var(--sound-level) * 55% + 1%)); box-shadow: 0 0 0 calc(var(--sound-level) * 32px) rgba(99,102,241,.1), 0 18px 38px rgba(30,64,175,.16); transition: box-shadow .08s linear; }
+
+.breath-play-area { display: grid; gap: 18px; }
+.balloon-scene { display: grid; gap: 14px; border: 1px solid #bae6fd; border-radius: 30px; padding: clamp(14px, 3vw, 24px); background: rgba(255,255,255,.94); box-shadow: 0 24px 60px rgba(14,116,144,.11); }
+.balloon-scene__sky { position: relative; height: clamp(290px, 43vh, 420px); overflow: hidden; border-radius: 23px; background: linear-gradient(#dff7ff 0%, #f0fdfa 70%, #d1fae5 70%); }
+.balloon-scene__sky::before { content: ''; position: absolute; inset: 14% 10% 18%; border-radius: 30px; background: linear-gradient(to top, rgba(52,211,153,.18), rgba(34,211,238,.05)); }
+.balloon-scene__cloud { position: absolute; width: 95px; height: 28px; border-radius: 999px; background: rgba(255,255,255,.82); box-shadow: 24px -13px 0 rgba(255,255,255,.82), 50px 0 0 rgba(255,255,255,.82); }
+.balloon-scene__cloud--one { top: 22%; left: 10%; }
+.balloon-scene__cloud--two { top: 12%; right: 18%; transform: scale(.75); }
+.balloon-scene__ground { position: absolute; inset: auto -10% -35px; height: 125px; border-radius: 50% 50% 0 0; background: #6ee7b7; }
+.balloon-scene__balloon { position: absolute; z-index: 2; left: calc(50% - 47px); bottom: 54px; width: 94px; height: 116px; border-radius: 52% 48% 48% 52% / 44% 44% 56% 56%; background: linear-gradient(145deg, #f472b6, #e11d48); box-shadow: inset -15px -8px 24px rgba(136,19,55,.22), 0 16px 32px rgba(225,29,72,.18); transition: transform .12s linear; }
+.balloon-scene.is-in-zone .balloon-scene__balloon { background: linear-gradient(145deg, #a78bfa, #4f46e5); box-shadow: inset -15px -8px 24px rgba(49,46,129,.2), 0 0 0 10px rgba(129,140,248,.12), 0 20px 38px rgba(79,70,229,.22); }
+.balloon-scene__shine { position: absolute; top: 18px; left: 20px; width: 17px; height: 29px; border-radius: 50%; background: rgba(255,255,255,.55); transform: rotate(28deg); }
+.balloon-scene__knot { position: absolute; left: 38px; bottom: -9px; border-right: 9px solid transparent; border-bottom: 11px solid #be123c; border-left: 9px solid transparent; }
+.balloon-scene__string { position: absolute; left: 46px; top: 122px; width: 2px; height: 62px; background: #64748b; }
+.balloon-meter { padding: 0 6px 4px; }
+.balloon-meter__labels { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; color: #64748b; font-size: .7rem; font-weight: 800; }
+.balloon-meter__labels strong { display: inline-flex; align-items: center; gap: 5px; color: #047857; }
+.balloon-meter__labels svg { width: 14px; }
+.balloon-meter__track { position: relative; height: 16px; overflow: hidden; border-radius: 999px; background: #e2e8f0; }
+.balloon-meter__zone { position: absolute; z-index: 1; inset-block: 0; background: rgba(52,211,153,.55); }
+.balloon-meter__level { position: absolute; z-index: 2; inset: 0 auto 0 0; border-radius: inherit; background: linear-gradient(90deg, #22d3ee, #6366f1); transition: width .08s linear; }
+.balloon-scene__score { justify-self: center; border-radius: 999px; padding: 7px 14px; background: #eef2ff; color: #4338ca; font-size: .85rem; font-weight: 800; }
+.balloon-scene__score strong { margin-left: 4px; }
+.breath-controls { display: grid; justify-items: center; gap: 12px; min-height: 125px; }
+.breath-slider { display: grid; gap: 8px; border-radius: 16px; padding: 12px 18px; background: #fff; color: #334155; font-weight: 850; box-shadow: 0 8px 24px rgba(30,41,59,.08); }
+.breath-slider input { width: min(420px, 70vw); accent-color: #4f46e5; }
