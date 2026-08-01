@@ -26,8 +26,10 @@ export const useInteractionSettingsStore = create(
         if (get().initialized) return
         const prefersReducedMotion = typeof window !== 'undefined'
           && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+        const hasPersistedChoice = typeof window !== 'undefined'
+          && Boolean(window.localStorage.getItem(INTERACTION_STORAGE_KEY))
         const preferences = resolveInitialPreferences({
-          saved: get().preferences,
+          saved: hasPersistedChoice ? get().preferences : undefined,
           age,
           prefersReducedMotion,
         })
@@ -64,4 +66,3 @@ export const useInteractionSettingsStore = create(
     },
   ),
 )
-
