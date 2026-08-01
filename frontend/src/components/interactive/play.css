@@ -171,3 +171,39 @@
 .breath-controls { display: grid; justify-items: center; gap: 12px; min-height: 125px; }
 .breath-slider { display: grid; gap: 8px; border-radius: 16px; padding: 12px 18px; background: #fff; color: #334155; font-weight: 850; box-shadow: 0 8px 24px rgba(30,41,59,.08); }
 .breath-slider input { width: min(420px, 70vw); accent-color: #4f46e5; }
+
+/* River Rescue voice quest */
+.quest-wrap { width: min(1080px, 100%); }
+.quest-scene { position: relative; min-height: min(650px, calc(100vh - 245px)); overflow: hidden; border: 8px solid #fff; border-radius: 32px; background: #0f766e; box-shadow: 0 26px 70px rgba(6,78,59,.2); }
+.quest-scene > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; }
+.quest-scene__wash { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(4,47,46,.04) 38%, rgba(4,47,46,.82) 100%); }
+.quest-scene--forest > img { filter: saturate(.92) hue-rotate(-8deg); }
+.quest-scene--river > img { filter: saturate(1.08) hue-rotate(5deg); }
+.quest-scene__story-chip { position: absolute; top: 18px; left: 18px; display: inline-flex; align-items: center; gap: 7px; border: 1px solid rgba(255,255,255,.55); border-radius: 999px; padding: 7px 12px; background: rgba(255,255,255,.9); color: #0f766e; font-size: .72rem; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; backdrop-filter: blur(8px); }
+.quest-scene__story-chip svg { width: 15px; }
+.quest-scene__speech { position: absolute; top: 20%; left: clamp(18px, 13%, 145px); width: min(280px, 55%); border-radius: 22px 22px 22px 6px; padding: 13px 16px; background: rgba(255,255,255,.94); color: #164e63; font-weight: 850; line-height: 1.4; box-shadow: 0 12px 28px rgba(15,23,42,.16); }
+.quest-scene__speech::after { content: ''; position: absolute; bottom: -12px; left: 16px; border-top: 14px solid #fff; border-right: 16px solid transparent; }
+.quest-scene__controls { position: absolute; z-index: 3; inset: auto clamp(12px, 4vw, 42px) 22px; display: grid; justify-items: center; gap: 13px; }
+.quest-prompt { display: grid; justify-items: center; gap: 3px; max-width: 680px; color: #fff; text-align: center; text-shadow: 0 2px 10px rgba(0,0,0,.34); }
+.quest-prompt strong { font-size: clamp(1.25rem, 3vw, 2rem); font-weight: 900; }
+.quest-prompt span { color: rgba(255,255,255,.86); font-size: .86rem; }
+.quest-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.quest-button, .quest-choice { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-width: 152px; border-radius: 17px; padding: 12px 20px; font-weight: 900; box-shadow: 0 10px 22px rgba(15,23,42,.18); }
+.quest-button svg, .quest-choice svg { width: 21px; height: 21px; }
+.quest-button--primary, .quest-choice { border: 2px solid rgba(255,255,255,.7); background: #fff; color: #3730a3; }
+.quest-button--quiet { border: 2px solid rgba(255,255,255,.55); background: rgba(15,118,110,.84); color: #fff; backdrop-filter: blur(8px); }
+.quest-button--stop { border: 2px solid #fecdd3; background: #fff1f2; color: #be123c; }
+.quest-choice:hover, .quest-choice:focus-visible, .quest-button:hover, .quest-button:focus-visible { transform: translateY(-2px); }
+.quest-scene__bridge-progress { position: absolute; z-index: 2; top: 17px; right: 18px; width: min(270px, 42%); height: 14px; overflow: hidden; border: 3px solid rgba(255,255,255,.8); border-radius: 999px; background: rgba(15,23,42,.35); }
+.quest-scene__bridge-progress span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #fbbf24, #34d399); transition: width .1s linear; }
+.quest-complete { display: grid; justify-items: center; gap: 20px; width: min(630px, 100%); margin: auto; border: 1px solid #a7f3d0; border-radius: 32px; padding: clamp(30px, 7vw, 64px); background: linear-gradient(145deg, #fff, #ecfdf5); box-shadow: 0 24px 64px rgba(6,95,70,.14); text-align: center; }
+.quest-complete > span { display: grid; place-items: center; width: 125px; height: 125px; border-radius: 50%; background: linear-gradient(145deg, #cffafe, #a7f3d0); font-size: 4.8rem; box-shadow: 0 16px 32px rgba(13,148,136,.16); }
+
+@media (max-width: 640px) {
+  .quest-scene { min-height: calc(100vh - 295px); border-width: 5px; border-radius: 24px; }
+  .quest-scene > img { object-position: 38% center; }
+  .quest-scene__speech { top: 17%; left: 12px; font-size: .78rem; }
+  .quest-scene__controls { bottom: 14px; }
+  .quest-prompt span { display: none; }
+  .quest-button, .quest-choice { min-width: 132px; padding: 11px 14px; }
+}
