@@ -207,3 +207,62 @@
   .quest-prompt span { display: none; }
   .quest-button, .quest-choice { min-width: 132px; padding: 11px 14px; }
 }
+
+/* Privacy-safe Mouth Mirror */
+.mirror-wrap { width: min(1020px, 100%); }
+.mirror-gate { display: grid; justify-items: center; gap: 20px; width: min(680px, 100%); margin: 0 auto; border: 1px solid #e9d5ff; border-radius: 32px; padding: clamp(28px, 6vw, 54px); background: linear-gradient(145deg, #fff, #faf5ff); box-shadow: 0 24px 64px rgba(107,33,168,.11); text-align: center; }
+.mirror-gate--complete { border-color: #a7f3d0; background: linear-gradient(145deg, #fff, #ecfdf5); }
+.mirror-gate__icon { display: grid; place-items: center; width: 108px; height: 108px; border-radius: 50% 42% 52% 48%; background: linear-gradient(145deg, #c084fc, #f472b6); color: #fff; font-size: 2.8rem; font-weight: 900; box-shadow: 0 18px 36px rgba(192,132,252,.26); }
+.mirror-gate__icon svg { width: 48px; height: 48px; }
+.mirror-privacy { display: flex; align-items: flex-start; gap: 11px; max-width: 520px; border-radius: 17px; padding: 13px 15px; background: #ecfdf5; color: #047857; text-align: left; }
+.mirror-privacy svg { flex: 0 0 21px; width: 21px; margin-top: 2px; }
+.mirror-privacy span { display: grid; gap: 2px; font-size: .8rem; line-height: 1.5; }
+.mirror-error { border-radius: 12px; padding: 9px 13px; background: #fff1f2; color: #be123c; font-size: .82rem; font-weight: 750; }
+.mirror-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.mirror-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 16px; padding: 11px 18px; font-weight: 900; }
+.mirror-button svg { width: 19px; height: 19px; }
+.mirror-button--primary { background: #7c3aed; color: #fff; box-shadow: 0 10px 22px rgba(124,58,237,.22); }
+.mirror-button--quiet { border: 2px solid #ddd6fe; background: #fff; color: #5b21b6; }
+
+.mirror-stage { display: grid; grid-template-columns: minmax(250px, .75fr) minmax(340px, 1.25fr); gap: 16px; }
+.mirror-stage.is-model-only { grid-template-columns: 1fr 1fr; }
+.mouth-guide, .mirror-camera, .mirror-model-message, .mirror-feedback { border: 1px solid #e9d5ff; border-radius: 27px; background: #fff; box-shadow: 0 16px 42px rgba(88,28,135,.09); }
+.mouth-guide { display: grid; justify-items: center; align-content: center; gap: 14px; min-height: 430px; padding: 28px; background: linear-gradient(155deg, #faf5ff, #fff); }
+.mouth-guide__face { position: relative; width: 190px; height: 190px; border: 8px solid #fff; border-radius: 46% 54% 48% 52%; background: linear-gradient(145deg, #fde68a, #fca5a5); box-shadow: 0 18px 34px rgba(244,63,94,.18); }
+.mouth-guide__eye { position: absolute; top: 58px; width: 14px; height: 19px; border-radius: 50%; background: #312e81; box-shadow: inset 4px 3px #fff; }
+.mouth-guide__eye--left { left: 51px; }
+.mouth-guide__eye--right { right: 51px; }
+.mouth-guide__mouth { position: absolute; left: 50%; top: 118px; border: 5px solid #9f1239; background: #4c0519; transform: translate(-50%, -50%); transition: all .25s ease; }
+.mouth-guide__mouth--open { width: 65px; height: 34px; border-radius: 50%; }
+.mouth-guide__mouth--long-open { width: 48px; height: 67px; border-radius: 50%; }
+.mouth-guide__mouth--closed { width: 68px; height: 5px; border-width: 3px 0 0; border-radius: 50%; background: transparent; }
+.mouth-guide__mouth--pop { width: 51px; height: 7px; border-width: 4px 0 0; border-radius: 50%; background: transparent; }
+.mouth-guide__mouth--round { width: 32px; height: 36px; border-radius: 50%; }
+.mouth-guide.is-matched .mouth-guide__face { box-shadow: 0 0 0 10px rgba(52,211,153,.16), 0 18px 34px rgba(16,185,129,.22); }
+.mouth-guide__copy { display: grid; justify-items: center; gap: 1px; }
+.mouth-guide__copy > span { color: #7c3aed; font-size: .68rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+.mouth-guide__copy strong { color: #4c1d95; font-size: 2.2rem; font-weight: 900; }
+.mouth-guide__copy p { color: #64748b; font-size: .83rem; }
+.mouth-guide__hold { width: min(260px, 90%); height: 12px; overflow: hidden; border-radius: 999px; background: #ede9fe; }
+.mouth-guide__hold span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #a78bfa, #34d399); transition: width .08s linear; }
+.mirror-camera { position: relative; min-height: 430px; overflow: hidden; background: #111827; }
+.mirror-camera video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.mirror-camera canvas { position: absolute; inset: 0; width: 100%; height: 100%; transform: scaleX(-1); }
+.mirror-camera__live { position: absolute; top: 14px; left: 14px; display: inline-flex; align-items: center; gap: 7px; border-radius: 999px; padding: 7px 11px; background: rgba(15,23,42,.72); color: #fff; font-size: .7rem; font-weight: 850; backdrop-filter: blur(7px); }
+.mirror-camera__live i { width: 8px; height: 8px; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 4px rgba(52,211,153,.2); }
+.mirror-camera__tip { position: absolute; inset: auto 16px 16px; border-radius: 13px; padding: 10px 13px; background: rgba(255,255,255,.9); color: #4c1d95; font-size: .8rem; font-weight: 850; text-align: center; }
+.mirror-model-message { display: grid; place-items: center; align-content: center; gap: 8px; min-height: 430px; padding: 30px; background: linear-gradient(145deg, #f8fafc, #fff); color: #64748b; text-align: center; }
+.mirror-model-message svg { width: 52px; height: 52px; color: #a78bfa; }
+.mirror-model-message strong { color: #334155; font-size: 1.15rem; }
+.mirror-model-message span { font-size: .85rem; }
+.mirror-feedback { grid-column: 1 / -1; display: grid; justify-items: center; gap: 12px; padding: 18px; }
+
+@media (max-width: 760px) {
+  .mirror-stage, .mirror-stage.is-model-only { grid-template-columns: 1fr; }
+  .mouth-guide, .mirror-camera, .mirror-model-message { min-height: 320px; }
+  .mouth-guide__face { width: 150px; height: 150px; }
+  .mouth-guide__eye { top: 43px; }
+  .mouth-guide__eye--left { left: 39px; }
+  .mouth-guide__eye--right { right: 39px; }
+  .mouth-guide__mouth { top: 93px; transform: translate(-50%, -50%) scale(.82); }
+}
