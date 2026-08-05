@@ -18,6 +18,7 @@ from collections import deque
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, Iterable
+from unittest.mock import patch
 
 
 SAMPLE_RATE = 16_000
@@ -188,6 +189,11 @@ def load_phoneme_processor(runtime: SimpleNamespace) -> Any:
     return runtime.AutoProcessor.from_pretrained(PHONE_MODEL_NAME, do_phonemize=False)
 
 
+def load_capture_models(runtime: SimpleNamespace) -> SimpleNamespace:
+    print("Loading the speech detector (usually a few seconds)...", flush=True)
+    return SimpleNamespace(vad=runtime.load_silero_vad())
+
+
 def load_models(runtime: SimpleNamespace, config: ListenerConfig) -> SimpleNamespace:
     print(f"Loading Whisper '{config.model}' (the first run downloads the model)...", flush=True)
     whisper_device, compute_type = choose_device(config.device, runtime)
@@ -204,9 +210,6 @@ def load_models(runtime: SimpleNamespace, config: ListenerConfig) -> SimpleNames
         whisper_device, compute_type = "cpu", "int8"
         whisper = runtime.WhisperModel(config.model, device=whisper_device, compute_type=compute_type)
 
-    print("Loading Silero speech detector...", flush=True)
-    vad = runtime.load_silero_vad()
-
     print(f"Loading multilingual phoneme model '{PHONE_MODEL_NAME}'...", flush=True)
     processor = load_phoneme_processor(runtime)
     phone_model = runtime.AutoModelForCTC.from_pretrained(PHONE_MODEL_NAME)
@@ -215,7 +218,6 @@ def load_models(runtime: SimpleNamespace, config: ListenerConfig) -> SimpleNames
     phone_model.eval()
     return SimpleNamespace(
         whisper=whisper,
-        vad=vad,
         processor=processor,
         phone_model=phone_model,
         phone_device=phone_device,
@@ -438,6 +440,33 @@ class SpeechStopDetectorTests(unittest.TestCase):
 
 
 class RuntimeHelperTests(unittest.TestCase):
+    def test_main_starts_listening_before_loading_heavy_inference_models(self):
+        events = []
+
+        def fake_load_models(_runtime, _config):
+            events.append("heavy-models")
+            return SimpleNamespace()
+
+        def fake_record(_runtime, _models, _config):
+            events.append("listening")
+            return (0.0,)
+
+        module = sys.modules[__name__]
+        with (
+            patch.object(module, "load_runtime", return_value=SimpleNamespace()),
+            patch.object(module, "load_capture_models", return_value=SimpleNamespace(), create=True),
+            patch.object(module, "load_models", side_effect=fake_load_models),
+            patch.object(module, "record_utterance", side_effect=fake_record),
+            patch.object(module, "write_temp_wav", return_value="fake.wav"),
+            patch.object(module, "transcribe_audio", return_value=("hello", "en", 0.9)),
+            patch.object(module, "recognize_phonemes", return_value="h ə l oʊ"),
+            patch.object(module, "remove_temp_file"),
+            patch("builtins.print"),
+        ):
+            self.assertEqual(main([]), 0)
+
+        self.assertLess(events.index("listening"), events.index("heavy-models"))
+
     def test_phoneme_processor_disables_text_phonemizer_backend(self):
         class FakeAutoProcessor:
             @staticmethod
@@ -497,11 +526,14 @@ def main(argv: list[str] | None = None) -> int:
     config = config_from_args(args, parser)
     wav_path: str | None = None
     try:
+        print("Starting the offline speech listener...", flush=True)
         runtime = load_runtime()
-        models = load_models(runtime, config)
-        audio = record_utterance(runtime, models, config)
+        capture_models = load_capture_models(runtime)
+        audio = record_utterance(runtime, capture_models, config)
         wav_path = write_temp_wav(audio)
         print("Processing speech...", flush=True)
+        print("On the first run, model downloads can take several minutes.", flush=True)
+        models = load_models(runtime, config)
         transcript, language, probability = transcribe_audio(models, wav_path)
         phonemes = recognize_phonemes(runtime, models, audio)
 
