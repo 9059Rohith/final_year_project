@@ -28,7 +28,7 @@
     "react-router-dom": "^7.18.2",
     "react-scroll": "^1.9.3",
     "recharts": "^2.12.0",
-    "three": "^0.163.0",
+    "three": "^0.185.1",
     "zod": "^3.22.4",
     "zustand": "^4.5.0"
   },
