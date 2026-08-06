@@ -3,11 +3,13 @@ from fastapi import APIRouter, HTTPException, status, Response, Depends
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
 import bcrypt
+from pymongo.errors import AutoReconnect, DuplicateKeyError, NetworkTimeout, PyMongoError, ServerSelectionTimeoutError
 from ..models.user import UserCreate, UserResponse, LoginRequest
-from ..database import get_database
+from ..database import ensure_database, get_database
 from ..utils.jwt_handler import create_access_token, get_current_user
 from ..utils.rate_limit import RateLimiter
 from ..config import settings
+from ..demo_user import DEMO_USER, is_demo_credentials, public_demo_user
 
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -36,71 +38,93 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
              dependencies=[Depends(register_rate_limit)])
 async def register(user_data: UserCreate, response: Response):
     """Register new user."""
-    db = get_database()
-    
-    # Validate password confirmation
     if user_data.password != user_data.confirm_password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Passwords do not match")
+
+    try:
+        db = await ensure_database()
+        existing_user = await db.users.find_one({"email": user_data.email})
+        if existing_user:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+
+        user_dict = {
+            "email": user_data.email,
+            "password_hash": hash_password(user_data.password),
+            "full_name": user_data.full_name,
+            "child_name": user_data.child_name,
+            "child_age": user_data.child_age,
+            "language": user_data.language,
+            "role": "user",
+            "created_at": datetime.utcnow(),
+            "last_login": None,
+            "total_sessions": 0,
+            "total_stars": 0,
+        }
+        result = await db.users.insert_one(user_dict)
+
+    except HTTPException:
+        raise
+    except DuplicateKeyError:
+        # Handles two registration clicks racing for the same email.
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+    except (AutoReconnect, NetworkTimeout, ServerSelectionTimeoutError, PyMongoError) as error:
+        print(f"[WARN] Registration database error: {type(error).__name__}")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Passwords do not match"
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Registration is temporarily unavailable. Please try again in a moment.",
         )
-    
-    # Check if user already exists
-    existing_user = await db.users.find_one({"email": user_data.email})
-    if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
-    
-    # Create user document
-    user_dict = {
-        "email": user_data.email,
-        "password_hash": hash_password(user_data.password),
-        "full_name": user_data.full_name,
-        "child_name": user_data.child_name,
-        "child_age": user_data.child_age,
-        "language": user_data.language,
-        "role": "user",
-        "created_at": datetime.utcnow(),
-        "last_login": None,
-        "total_sessions": 0,
-        "total_stars": 0
-    }
-    
-    result = await db.users.insert_one(user_dict)
-    user_dict["_id"] = str(result.inserted_id)
-    
-    # Create JWT token
-    access_token = create_access_token(
-        data={"sub": user_data.email, "role": "user"}
-    )
-    
-    # Set HTTP-only cookie
+
+    access_token = create_access_token(data={"sub": user_data.email, "role": "user"})
     response.set_cookie(
-        key="access_token",
+        key=settings.ACCESS_COOKIE_NAME,
         value=access_token,
         httponly=True,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="lax"
+        samesite=settings.COOKIE_SAMESITE,
+        secure=settings.COOKIE_SECURE,
+        path="/",
     )
-    
     return {
         "message": "User registered successfully",
         "access_token": access_token,
         "token_type": "bearer",
         "user": {
+            "id": str(result.inserted_id),
             "email": user_data.email,
             "full_name": user_data.full_name,
             "child_name": user_data.child_name,
-            "role": "user"
-        }
+            "child_age": user_data.child_age,
+            "language": user_data.language,
+            "role": "user",
+            "total_sessions": 0,
+            "total_stars": 0,
+        },
     }
 
 
 @router.post("/login", dependencies=[Depends(login_rate_limit)])
 async def login(login_data: LoginRequest, response: Response):
     """Login user."""
+    if is_demo_credentials(login_data.email, login_data.password):
+        access_token = create_access_token(
+            data={"sub": DEMO_USER["email"], "role": DEMO_USER["role"]}
+        )
+        response.set_cookie(
+            key=settings.ACCESS_COOKIE_NAME,
+            value=access_token,
+            httponly=True,
+            max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            samesite=settings.COOKIE_SAMESITE,
+            secure=settings.COOKIE_SECURE,
+            path="/",
+        )
+        return {
+            "message": "Demo login successful",
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": public_demo_user(),
+        }
+
     db = get_database()
 
     # Find user (admin accounts are seeded from env at startup; no hardcoded
@@ -138,11 +162,13 @@ async def login(login_data: LoginRequest, response: Response):
     
     # Set HTTP-only cookie
     response.set_cookie(
-        key="access_token",
+        key=settings.ACCESS_COOKIE_NAME,
         value=access_token,
         httponly=True,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="lax"
+        samesite=settings.COOKIE_SAMESITE,
+        secure=settings.COOKIE_SECURE,
+        path="/",
     )
     
     return {
@@ -181,11 +207,13 @@ async def admin_login(login_data: LoginRequest, response: Response):
     
     # Set HTTP-only cookie
     response.set_cookie(
-        key="access_token",
+        key=settings.ACCESS_COOKIE_NAME,
         value=access_token,
         httponly=True,
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="lax"
+        samesite=settings.COOKIE_SAMESITE,
+        secure=settings.COOKIE_SECURE,
+        path="/",
     )
     
     return {
@@ -203,7 +231,7 @@ async def admin_login(login_data: LoginRequest, response: Response):
 @router.post("/logout")
 async def logout(response: Response):
     """Logout user."""
-    response.delete_cookie(key="access_token")
+    response.delete_cookie(key=settings.ACCESS_COOKIE_NAME, path="/")
     return {"message": "Logout successful"}
 
 

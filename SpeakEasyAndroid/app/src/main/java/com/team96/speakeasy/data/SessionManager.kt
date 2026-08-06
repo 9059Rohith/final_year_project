@@ -10,8 +10,8 @@ import kotlinx.coroutines.runBlocking
 private val Context.dataStore by preferencesDataStore(name = "speakeasy_session")
 
 /**
- * Holds the JWT in memory (for the OkHttp interceptor) and persists it to DataStore
- * so the user stays logged in across app launches.
+ * Holds the JWT in memory (for the OkHttp interceptor) and persists only its
+ * Keystore-encrypted representation to DataStore.
  */
 object SessionManager {
     @Volatile var token: String? = null
@@ -31,7 +31,7 @@ object SessionManager {
         appContext = context.applicationContext
         runBlocking {
             val prefs = appContext.dataStore.data.first()
-            token = prefs[TOKEN_KEY]
+            token = prefs[TOKEN_KEY]?.let { encrypted -> runCatching { TokenCipher.decrypt(encrypted) }.getOrNull() }
             childName = prefs[CHILD_KEY]
             fullName = prefs[NAME_KEY]
             email = prefs[EMAIL_KEY]
@@ -44,7 +44,7 @@ object SessionManager {
         this.fullName = user?.fullName
         this.email = user?.email
         appContext.dataStore.edit { prefs ->
-            prefs[TOKEN_KEY] = token
+            prefs[TOKEN_KEY] = TokenCipher.encrypt(token)
             user?.childName?.let { prefs[CHILD_KEY] = it }
             user?.fullName?.let { prefs[NAME_KEY] = it }
             user?.email?.let { prefs[EMAIL_KEY] = it }

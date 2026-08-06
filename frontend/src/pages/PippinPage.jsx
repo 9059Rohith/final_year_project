@@ -1,188 +1,305 @@
-import { useEffect, useReducer, useRef, useState } from 'react'
-import { Image, Mic, PawPrint, RotateCcw, ShieldCheck, Square } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Mic, Music2, Play, ShieldCheck, Sparkles } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import InteractiveSessionShell from '../components/interactive/InteractiveSessionShell'
-import { createSession, sessionReducer } from '../features/interactive/sessionEngine'
-import { appendLocalHistory, getPippinResponse, matchPippinIntent, toPippinReport } from '../features/pippin/pippinLogic'
+import PippinStorybook from '../components/storybook/PippinStorybook'
+import {
+  APPLICATION_VOICE_PROFILE_ID,
+  speakCharacter,
+  stopCharacterSpeech,
+} from '../features/characters/characterVoice'
+import { readAnalyserLevel } from '../features/interactive/audioLevel'
+import { buildKittenEchoReport, createKittenEcho } from '../features/storybook/kittenEcho'
+import { createVoiceTurnDetector } from '../features/storybook/voiceTurnDetector'
 import { useAudioRecorder } from '../hooks/useAudioRecorder'
 import { interactiveSessionsAPI } from '../services/api'
 import { useInteractionSettingsStore } from '../store/interactionSettingsStore'
 
-const PIPPIN_ACTIVITY = { id: 'pippin', type: 'pippin', steps: [{ id: 'play', responseMode: 'touch', reward: 1 }] }
-const COMMAND_PAIRS = [
-  [{ intent: 'hello', label: 'Hello', icon: '👋' }, { intent: 'ball', label: 'Ball', icon: '🔵' }],
-  [{ intent: 'jump', label: 'Jump', icon: '⬆️' }, { intent: 'dance', label: 'Dance', icon: '🎵' }],
-  [{ intent: 'amma', label: 'Amma', icon: '💛' }, { intent: 'appa', label: 'Appa', icon: '💙' }],
-  [{ intent: 'a', label: 'A', icon: 'அ' }, { intent: 'aa', label: 'Aa', icon: 'ஆ' }],
-  [{ intent: 'la', label: 'La', icon: 'ல' }, { intent: 'eat', label: 'Eat', icon: '🍎' }],
+const COPY = {
+  welcome: 'Hello! I repeat your words / வணக்கம்! நீங்கள் சொல்வதை நான் திரும்பச் சொல்வேன்',
+  listening: 'Listening / கேட்கிறேன்',
+  preparing: 'Getting ready / தயாராகிறேன்',
+  repeating: 'Pippin repeats / பிப்பின் திரும்பச் சொல்கிறான்',
+  ready: 'I am ready for your next words / உங்கள் அடுத்த வார்த்தைகளுக்கு நான் தயார்',
+  unavailable: 'Microphone unavailable. Choose a phrase / மைக்ரோஃபோன் கிடைக்கவில்லை. ஒரு சொல்லைத் தேர்ந்தெடுக்கலாம்.',
+  privacy: 'Your voice stays on this device and is not saved / உங்கள் குரல் இந்தச் சாதனத்திலேயே இருக்கும்; சேமிக்கப்படாது.',
+}
+
+const FALLBACK_PHRASES = [
+  { label: 'Hello / வணக்கம்', speech: 'Hello. வணக்கம்' },
+  { label: 'Mother / அம்மா', speech: 'Mother. அம்மா' },
+  { label: 'Come, Kavi / கவி வா', speech: 'Come, Kavi. கவி வா' },
 ]
+
+const BILINGUAL_SHELL_LABELS = {
+  locale: 'bi',
+  playPractice: 'Play & Practice / விளையாடிப் பழகலாம்',
+  exit: 'Exit activity / வெளியே செல்லுங்கள்',
+  calm: 'Calm / அமைதி',
+  settings: 'Comfort settings / வசதி அமைப்புகள்',
+  resume: 'Resume / தொடருங்கள்',
+  pause: 'Pause / இடைநிறுத்துங்கள்',
+}
+
+function playPippinSong(scope) {
+  const AudioContextCtor = scope.AudioContext || scope.webkitAudioContext
+  if (!AudioContextCtor) return () => {}
+  const context = new AudioContextCtor()
+  const notes = [523, 659, 784, 659, 523]
+  notes.forEach((frequency, index) => {
+    const oscillator = context.createOscillator()
+    const gain = context.createGain()
+    oscillator.type = 'sine'
+    oscillator.frequency.setValueAtTime(frequency, context.currentTime + index * .18)
+    gain.gain.setValueAtTime?.(.0001, context.currentTime)
+    gain.gain.exponentialRampToValueAtTime?.(.12, context.currentTime + index * .18 + .02)
+    gain.gain.exponentialRampToValueAtTime?.(.0001, context.currentTime + index * .18 + .16)
+    oscillator.connect(gain)
+    gain.connect(context.destination)
+    oscillator.start(context.currentTime + index * .18)
+    oscillator.stop(context.currentTime + index * .18 + .17)
+  })
+  return () => context.close().catch(() => {})
+}
 
 export default function PippinPage() {
   const navigate = useNavigate()
-  const [session, dispatch] = useReducer(sessionReducer, PIPPIN_ACTIVITY, createSession)
-  const [mode, setMode] = useState('voice')
-  const [history, setHistory] = useState([])
-  const [notice, setNotice] = useState('Tap the microphone and say a word')
-  const [action, setAction] = useState('idle')
-  const [pairIndex, setPairIndex] = useState(0)
-  const [petCount, setPetCount] = useState(0)
-  const startedAtRef = useRef(Date.now())
-  const pendingSpeechRef = useRef(false)
-  const interactionRef = useRef(0)
-  const independentRef = useRef(0)
-  const visualRef = useRef(0)
   const { preferences } = useInteractionSettingsStore()
-  const { isRecording, transcript, startRecording, stopRecording, resetRecording } = useAudioRecorder()
+  const [mood, setMood] = useState('idle')
+  const [message, setMessage] = useState(COPY.welcome)
+  const [audioLevel, setAudioLevel] = useState(0)
+  const [activated, setActivated] = useState(false)
+  const [hasPlayed, setHasPlayed] = useState(false)
+  const [microphoneUnavailable, setMicrophoneUnavailable] = useState(false)
+  const echoRef = useRef(null)
+  const detectorRef = useRef(createVoiceTurnDetector())
+  const monitorFrameRef = useRef(0)
+  const restartTimerRef = useRef(0)
+  const returnTimerRef = useRef(0)
+  const songStopRef = useRef(() => {})
+  const autoModeRef = useRef(false)
+  const startInFlightRef = useRef(false)
+  const turnActionRef = useRef(null)
+  const mountedRef = useRef(false)
+  const beginAutomaticTurnRef = useRef(() => {})
+  const startedAtRef = useRef(Date.now())
+  const repeatCountRef = useRef(0)
+  const { isRecording, audioBlob, analyserRef, startRecording, stopRecording, resetRecording } = useAudioRecorder()
+
+  const stopMonitoring = useCallback(() => {
+    window.cancelAnimationFrame(monitorFrameRef.current)
+    monitorFrameRef.current = 0
+    setAudioLevel(0)
+  }, [])
+
+  const monitorTurn = useCallback(() => {
+    if (!autoModeRef.current || !mountedRef.current) return
+    const level = readAnalyserLevel(analyserRef.current)
+    setAudioLevel(level)
+    const outcome = detectorRef.current.sample(level, performance.now())
+    if (outcome.event === 'turn-complete' || outcome.event === 'max-duration') {
+      stopMonitoring()
+      turnActionRef.current = outcome.hasSpeech ? 'replay' : 'restart'
+      setMood('preparing')
+      setMessage(COPY.preparing)
+      stopRecording()
+      return
+    }
+    monitorFrameRef.current = window.requestAnimationFrame(monitorTurn)
+  }, [analyserRef, stopMonitoring, stopRecording])
+
+  const beginAutomaticTurn = useCallback(async () => {
+    if (!mountedRef.current || !autoModeRef.current || startInFlightRef.current) return
+    startInFlightRef.current = true
+    window.clearTimeout(restartTimerRef.current)
+    stopMonitoring()
+    echoRef.current?.stop()
+    stopCharacterSpeech()
+    resetRecording()
+    detectorRef.current.reset(performance.now())
+    const allowed = await startRecording('en-IN', { speechRecognition: false, repeatRecognized: false })
+    startInFlightRef.current = false
+
+    if (!mountedRef.current || !autoModeRef.current) {
+      if (allowed) resetRecording()
+      return
+    }
+    if (!allowed) {
+      autoModeRef.current = false
+      setMicrophoneUnavailable(true)
+      setMood('encourage')
+      setMessage(COPY.unavailable)
+      return
+    }
+
+    setMicrophoneUnavailable(false)
+    setMood('listening')
+    setMessage(COPY.listening)
+    monitorFrameRef.current = window.requestAnimationFrame(monitorTurn)
+  }, [monitorTurn, resetRecording, startRecording, stopMonitoring])
 
   useEffect(() => {
-    dispatch({ type: 'START', at: Date.now() })
-    dispatch({ type: 'PROMPT_FINISHED', at: Date.now() })
+    beginAutomaticTurnRef.current = beginAutomaticTurn
+  }, [beginAutomaticTurn])
+
+  useEffect(() => {
+    mountedRef.current = true
+    echoRef.current = createKittenEcho({ scope: window, onLevel: setAudioLevel })
     return () => {
+      mountedRef.current = false
+      autoModeRef.current = false
+      turnActionRef.current = null
+      window.cancelAnimationFrame(monitorFrameRef.current)
+      window.clearTimeout(restartTimerRef.current)
+      window.clearTimeout(returnTimerRef.current)
+      songStopRef.current()
+      echoRef.current?.dispose()
+      stopCharacterSpeech()
       resetRecording()
-      window.speechSynthesis?.cancel()
     }
   }, [resetRecording])
 
-  const speak = (text) => {
-    if (!preferences.soundEnabled || !window.speechSynthesis) return
-    window.speechSynthesis.cancel()
-    const utterance = new SpeechSynthesisUtterance(text)
-    utterance.rate = preferences.sessionPace === 'guided' ? 0.88 : 1
-    utterance.pitch = 1.12
-    utterance.lang = 'en-IN'
-    window.speechSynthesis.speak(utterance)
-  }
-
-  const interact = (text, source = 'voice', forcedIntent) => {
-    const intent = forcedIntent || matchPippinIntent(text)
-    const response = getPippinResponse(intent, text)
-    const item = { id: `${Date.now()}-${interactionRef.current}`, intent, heard: text, response, source }
-    interactionRef.current += 1
-    if (source === 'voice') independentRef.current += 1
-    else visualRef.current += 1
-    setHistory((current) => appendLocalHistory(current, item))
-    setNotice(response)
-    setAction(intent)
-    speak(response)
-    window.setTimeout(() => setAction('idle'), 1800)
-    dispatch({ type: 'BEGIN_ATTEMPT', at: Date.now() })
-    dispatch({ type: 'RESPONSE_CAPTURED', response: { intent }, at: Date.now() })
-    dispatch({ type: 'EVALUATION_SUCCEEDED', assistance: source === 'voice' ? 'independent' : 'visual_prompt', at: Date.now() })
-  }
-
   useEffect(() => {
-    if (isRecording || !pendingSpeechRef.current) return
-    pendingSpeechRef.current = false
-    if (transcript.trim()) interact(transcript.trim(), 'voice')
-    else {
-      setNotice('I did not catch a word. Try a picture instead!')
-      setMode('pictures')
+    const action = turnActionRef.current
+    if (!action || !audioBlob) return
+    turnActionRef.current = null
+    if (!autoModeRef.current) return
+
+    if (action === 'restart') {
+      restartTimerRef.current = window.setTimeout(() => beginAutomaticTurnRef.current(), 250)
+      return
     }
-    resetRecording()
-  }, [isRecording, resetRecording, transcript])
 
-  const startListening = async () => {
-    setNotice('Pippin is listening…')
-    const allowed = await startRecording('ta-IN', { speechRecognition: true, repeatRecognized: false })
-    if (!allowed) {
-      setNotice('Microphone is unavailable. Choose a picture word!')
-      setMode('pictures')
+    const repeatLocally = async () => {
+      setHasPlayed(true)
+      setMood('repeating')
+      setMessage(COPY.repeating)
+      repeatCountRef.current += 1
+      try {
+        await echoRef.current?.play(audioBlob)
+      } finally {
+        if (mountedRef.current && autoModeRef.current) {
+          setMood('ready')
+          setMessage(COPY.ready)
+          restartTimerRef.current = window.setTimeout(() => beginAutomaticTurnRef.current(), 350)
+        }
+      }
     }
+    repeatLocally()
+  }, [audioBlob])
+
+  const enableMicrophone = () => {
+    setActivated(true)
+    setMicrophoneUnavailable(false)
+    autoModeRef.current = true
+    beginAutomaticTurnRef.current()
   }
 
-  const finishListening = () => {
-    pendingSpeechRef.current = true
-    stopRecording()
+  const suspendHandsFree = useCallback(() => {
+    autoModeRef.current = false
+    turnActionRef.current = null
+    window.clearTimeout(restartTimerRef.current)
+    stopMonitoring()
+    echoRef.current?.stop()
+    stopCharacterSpeech()
+    if (isRecording) stopRecording()
+  }, [isRecording, stopMonitoring, stopRecording])
+
+  const resumeAfterActivity = (messageAfter) => {
+    window.clearTimeout(returnTimerRef.current)
+    returnTimerRef.current = window.setTimeout(() => {
+      if (!mountedRef.current) return
+      if (activated && !microphoneUnavailable) {
+        autoModeRef.current = true
+        beginAutomaticTurnRef.current()
+      } else {
+        setMood('ready')
+        setMessage(messageAfter)
+      }
+    }, 2600)
   }
 
-  const choosePicture = (command) => {
-    interact(command.label, 'picture', command.intent)
-    setPairIndex((current) => (current + 1) % COMMAND_PAIRS.length)
+  const dance = () => {
+    suspendHandsFree()
+    songStopRef.current()
+    setMood('dance')
+    setMessage('Dance with me / என்னுடன் ஆடுங்கள்')
+    resumeAfterActivity(COPY.welcome)
   }
 
-  const petPippin = () => {
-    const next = petCount + 1
-    setPetCount(next)
-    setAction('pet')
-    setNotice(next % 2 ? 'That gentle pat feels lovely!' : 'Pippin is purring for you.')
-    window.setTimeout(() => setAction('idle'), 900)
+  const sing = () => {
+    suspendHandsFree()
+    songStopRef.current()
+    setMood('sing')
+    setMessage('Sing with me / என்னுடன் பாடுங்கள்')
+    songStopRef.current = playPippinSong(window)
+    speakCharacter('Meow meow, little friend! மியாவ் மியாவ், குட்டி நண்பா!', {
+      profileId: APPLICATION_VOICE_PROFILE_ID, language: 'en-IN', enabled: preferences.soundEnabled,
+    })
+    resumeAfterActivity(COPY.welcome)
   }
 
-  const resetLocal = () => {
-    setHistory([])
-    setNotice('Local history cleared. Ready for a new word!')
-    interactionRef.current = 0
-    independentRef.current = 0
-    visualRef.current = 0
-    startedAtRef.current = Date.now()
+  const playFixedPhrase = ({ label, speech }) => {
+    setMood('sing')
+    setMessage(label)
+    speakCharacter(speech, { profileId: APPLICATION_VOICE_PROFILE_ID, language: 'en-IN', enabled: preferences.soundEnabled })
+  }
+
+  const reset = () => {
+    suspendHandsFree()
+    window.clearTimeout(returnTimerRef.current)
+    songStopRef.current()
     resetRecording()
+    setActivated(false)
+    setHasPlayed(false)
+    setMicrophoneUnavailable(false)
+    setMood('idle')
+    setMessage(COPY.welcome)
   }
 
   const leave = () => {
-    const completedAt = Date.now()
-    const compactHistory = toPippinReport(history)
-    if (compactHistory.length) {
-      interactiveSessionsAPI.create({
-        activity_id: 'pippin',
-        activity_type: 'pippin',
-        started_at: new Date(startedAtRef.current).toISOString(),
-        completed_at: new Date(completedAt).toISOString(),
-        communication_turns: compactHistory.length,
-        successful_turns: compactHistory.length,
-        attempts: compactHistory.length,
-        assistance_counts: { independent: independentRef.current, verbal_prompt: 0, visual_prompt: visualRef.current, modelled: 0, skipped: 0 },
-        duration_ms: Math.min(3_600_000, completedAt - startedAtRef.current),
-        effort_points: compactHistory.length * 2,
-      }).catch(() => {})
-    }
+    suspendHandsFree()
+    interactiveSessionsAPI.create(buildKittenEchoReport({
+      startedAt: startedAtRef.current,
+      completedAt: Date.now(),
+      repeatCount: repeatCountRef.current,
+    })).catch(() => {})
     navigate('/play')
   }
 
-  const pair = COMMAND_PAIRS[pairIndex]
+  const listening = mood === 'listening'
+
   return (
-    <InteractiveSessionShell title="Play with Pippin" subtitle="Talk, tap, and practise friendly words" state={session} dispatch={dispatch} onExit={leave}>
-      <div className="pippin-wrap">
-        <section className="pippin-stage">
-          <div className="pippin-speech" role="status" aria-live="polite">{notice}</div>
-          <button className={`pippin-pet pippin-pet--${action}`} type="button" onClick={petPippin} aria-label="Give Pippin a gentle pat">
-            <span className="pippin-pet__sparkles" aria-hidden="true">✦ · ✦</span>
-            <img src="/assets/interactive/pippin-mascot.png" alt="Pippin, a cheerful orange kitten wearing a blue scarf" />
-          </button>
-          <span className="pippin-pat-hint"><PawPrint aria-hidden="true" /> Tap Pippin for a gentle pat</span>
-        </section>
-
-        <section className="pippin-panel" aria-label="Talk to Pippin">
-          <div className="pippin-mode" role="group" aria-label="Choose input method">
-            <button className={mode === 'voice' ? 'is-active' : ''} type="button" onClick={() => setMode('voice')}><Mic aria-hidden="true" /> Voice</button>
-            <button className={mode === 'pictures' ? 'is-active' : ''} type="button" onClick={() => setMode('pictures')}><Image aria-hidden="true" /> Pictures</button>
-          </div>
-
-          {mode === 'voice' ? (
-            <div className="pippin-primary-action">
-              <button className={`interactive-control pippin-mic ${isRecording ? 'is-listening' : ''}`} type="button" onClick={isRecording ? finishListening : startListening}>
-                {isRecording ? <Square aria-hidden="true" /> : <Mic aria-hidden="true" />}
+    <InteractiveSessionShell
+      title="Talk with Pippin / பிப்பினுடன் பேசலாம்"
+      subtitle="Speak naturally; Pippin repeats locally / இயல்பாகப் பேசுங்கள்; பிப்பின் திரும்பச் சொல்லும்"
+      state={{ phase: mood, stepIndex: 0 }}
+      onExit={leave}
+      labels={BILINGUAL_SHELL_LABELS}
+    >
+      <div className="pippin-story-layout">
+        <PippinStorybook mood={mood} audioLevel={audioLevel} motionLevel={preferences.motionLevel} message={message} />
+        <section className="pippin-story-card" aria-live="polite">
+          <span className="pippin-story-kicker"><Sparkles aria-hidden="true" /> Your kitten friend / உங்கள் குட்டிப் பூனை நண்பன்</span>
+          <h2 className={listening ? 'pippin-listening-status' : ''}>{message}</h2>
+          <div className="pippin-story-actions">
+            {!activated ? (
+              <button className="pippin-story-button pippin-story-button--primary" type="button" onClick={enableMicrophone}>
+                <Mic aria-hidden="true" /> Enable microphone / மைக்ரோஃபோனை இயக்கவும்
               </button>
-              <strong>{isRecording ? 'Tap when finished' : 'Say a word to Pippin'}</strong>
-              <span>Try hello, ball, amma, appa, jump, or any short word.</span>
-            </div>
-          ) : (
-            <div className="pippin-picture-pair">
-              {pair.map((command) => (
-                <button className="interactive-control pippin-command" type="button" key={command.intent} onClick={() => choosePicture(command)}>
-                  <span aria-hidden="true">{command.icon}</span><strong>{command.label}</strong>
-                </button>
+            ) : null}
+            <button className="pippin-story-button" type="button" onClick={dance}><Play aria-hidden="true" /> Dance / ஆடு</button>
+            <button className="pippin-story-button" type="button" onClick={sing}><Music2 aria-hidden="true" /> Sing / பாடு</button>
+          </div>
+          {microphoneUnavailable ? (
+            <div className="pippin-fixed-words" aria-label="Choose a phrase / சொல்லைத் தேர்ந்தெடுக்கவும்">
+              {FALLBACK_PHRASES.map((phrase) => (
+                <button type="button" key={phrase.label} onClick={() => playFixedPhrase(phrase)}>{phrase.label}</button>
               ))}
             </div>
-          )}
-
-          <div className="pippin-privacy"><ShieldCheck aria-hidden="true" /> Words stay in this tab. The progress report stores counts only.</div>
-          {history.length ? (
-            <details className="pippin-history">
-              <summary>Recent local words ({history.length})</summary>
-              <ul>{history.map((item) => <li key={item.id}><span>{item.source === 'picture' ? 'Picture' : 'You'}</span><strong>{item.heard}</strong><small>Pippin: {item.response}</small></li>)}</ul>
-              <button type="button" onClick={resetLocal}><RotateCcw aria-hidden="true" /> Clear local history</button>
-            </details>
           ) : null}
+          <p className="pippin-story-privacy"><ShieldCheck aria-hidden="true" /> {COPY.privacy}</p>
+          {activated || hasPlayed ? <button className="pippin-story-reset" type="button" onClick={reset}>New game / புதிய விளையாட்டு</button> : null}
         </section>
       </div>
     </InteractiveSessionShell>

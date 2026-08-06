@@ -2,7 +2,7 @@
 
 **Date:** 2026-08-05
 
-**Status:** Approved design, pending written-spec review
+**Status:** Approved and implemented
 
 **Primary platform:** Existing React/Vite web application
 **Audience:** Tamil-speaking children ages 3–10 and their caregivers

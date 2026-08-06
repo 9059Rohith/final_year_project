@@ -23,11 +23,11 @@ const INITIAL_UPCOMING = [
 ]
 
 const PAST = [
-  { id: 'p1', therapist: 'Dr. Anitha Raman', date: 'Jun 14, 2026', time: '04:30 PM', status: 'completed' },
-  { id: 'p2', therapist: 'Dr. Karthik S.', date: 'Jun 11, 2026', time: '10:30 AM', status: 'completed' },
-  { id: 'p3', therapist: 'Dr. Priya Mohan', date: 'Jun 09, 2026', time: '03:00 PM', status: 'missed' },
-  { id: 'p4', therapist: 'Dr. Anitha Raman', date: 'Jun 06, 2026', time: '11:00 AM', status: 'completed' },
-  { id: 'p5', therapist: 'Dr. Suresh Kumar', date: 'Jun 02, 2026', time: '02:00 PM', status: 'completed' },
+  { id: 'p1', therapist: 'Dr. Anitha Raman', date: 'Jun 14, 2026', time: '04:30 PM', status: 'completed', note: 'Practised clear initial sounds and slow syllable pacing.' },
+  { id: 'p2', therapist: 'Dr. Karthik S.', date: 'Jun 11, 2026', time: '10:30 AM', status: 'completed', note: 'Completed tongue-placement and oral-motor warm-up exercises.' },
+  { id: 'p3', therapist: 'Dr. Priya Mohan', date: 'Jun 09, 2026', time: '03:00 PM', status: 'missed', note: 'No session notes because this appointment was missed.' },
+  { id: 'p4', therapist: 'Dr. Anitha Raman', date: 'Jun 06, 2026', time: '11:00 AM', status: 'completed', note: 'Improved consistency on the target sound during word practice.' },
+  { id: 'p5', therapist: 'Dr. Suresh Kumar', date: 'Jun 02, 2026', time: '02:00 PM', status: 'completed', note: 'Worked on short phrases and naming familiar objects.' },
 ]
 
 function initials(name) {
@@ -38,6 +38,8 @@ export default function AppointmentsPage() {
   const { user } = useAuthStore()
   const [upcoming, setUpcoming] = useState(INITIAL_UPCOMING)
   const [showModal, setShowModal] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [activeNote, setActiveNote] = useState(null)
   const [form, setForm] = useState({ therapist: THERAPISTS[0].name, date: '', time: '', reason: '' })
 
   const stats = useMemo(() => ({
@@ -51,9 +53,17 @@ export default function AppointmentsPage() {
     setUpcoming((list) => list.filter((a) => a.id !== id))
     toast.success('Appointment cancelled')
   }
-  const reschedule = (a) => toast.success(`Reschedule request sent for ${a.therapist}`)
-  const join = (a) => toast.success(`Joining session with ${a.therapist}…`)
+  const openBooking = (appointment = null) => {
+    setEditingId(appointment?.id || null)
+    setForm({ therapist: appointment?.therapist || THERAPISTS[0].name, date: '', time: '', reason: '' })
+    setShowModal(true)
+  }
 
+  const closeBooking = () => {
+    setShowModal(false)
+    setEditingId(null)
+    setForm({ therapist: THERAPISTS[0].name, date: '', time: '', reason: '' })
+  }
   const submit = (e) => {
     e.preventDefault()
     if (!form.date || !form.time) {
@@ -61,8 +71,8 @@ export default function AppointmentsPage() {
       return
     }
     const t = THERAPISTS.find((x) => x.name === form.therapist) || THERAPISTS[0]
-    const newAppt = {
-      id: Date.now(),
+    const appointment = {
+      id: editingId || Date.now(),
       therapist: t.name,
       specialty: t.specialty,
       date: form.date,
@@ -70,10 +80,11 @@ export default function AppointmentsPage() {
       mode: 'video',
       color: t.color,
     }
-    setUpcoming((list) => [newAppt, ...list])
-    setShowModal(false)
-    setForm({ therapist: THERAPISTS[0].name, date: '', time: '', reason: '' })
-    toast.success('Appointment booked!')
+    setUpcoming((list) => editingId
+      ? list.map((item) => (item.id === editingId ? appointment : item))
+      : [appointment, ...list])
+    closeBooking()
+    toast.success(editingId ? 'Appointment rescheduled!' : 'Appointment booked!')
   }
 
   return (
@@ -83,7 +94,7 @@ export default function AppointmentsPage() {
       icon={CalendarClock}
       actions={
         <button
-          onClick={() => setShowModal(true)}
+          onClick={() => openBooking()}
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm bg-white text-primary-600 hover:bg-white/90 transition shadow-md"
         >
           <Plus className="w-4 h-4" /> Book New
@@ -106,7 +117,7 @@ export default function AppointmentsPage() {
               title="Upcoming Sessions"
               subtitle="Your next therapy appointments"
               icon={CalendarClock}
-              action={<GradientButton onClick={() => setShowModal(true)}><Plus className="w-4 h-4" /> Book New Appointment</GradientButton>}
+              action={<GradientButton onClick={() => openBooking()}><Plus className="w-4 h-4" /> Book New Appointment</GradientButton>}
             />
 
             {upcoming.length === 0 ? (
@@ -149,13 +160,14 @@ export default function AppointmentsPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => join(a)}
-                          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-primary-500 to-secondary-500 text-white text-xs font-semibold shadow-sm hover:shadow-md transition"
+                          disabled
+                          title={a.mode === 'video' ? 'A meeting link has not been assigned yet' : 'Clinic contact details have not been assigned yet'}
+                          className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-neutral-200 dark:bg-neutral-800 text-neutral-500 text-xs font-semibold cursor-not-allowed"
                         >
-                          {a.mode === 'video' ? <Video className="w-3.5 h-3.5" /> : <Phone className="w-3.5 h-3.5" />} Join
+                          {a.mode === 'video' ? <Video className="w-3.5 h-3.5" /> : <Phone className="w-3.5 h-3.5" />} Link unavailable
                         </button>
                         <button
-                          onClick={() => reschedule(a)}
+                          onClick={() => openBooking(a)}
                           className="p-2 rounded-xl text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
                           title="Reschedule"
                         >
@@ -200,7 +212,8 @@ export default function AppointmentsPage() {
                         </td>
                         <td className="py-3 text-right">
                           <button
-                            onClick={() => toast.success(`Opening notes for ${p.date}`)}
+                            onClick={() => setActiveNote((current) => current?.id === p.id ? null : p)}
+                            aria-expanded={activeNote?.id === p.id}
                             className="text-primary-600 dark:text-primary-400 font-semibold text-xs hover:underline"
                           >
                             View notes
@@ -211,6 +224,12 @@ export default function AppointmentsPage() {
                   </tbody>
                 </table>
               </div>
+              {activeNote && (
+                <div className="mt-4 rounded-2xl bg-primary-50 dark:bg-primary-900/20 border border-primary-100 dark:border-primary-800/40 p-4" role="status">
+                  <p className="text-xs font-bold uppercase tracking-wide text-primary-600 dark:text-primary-300">Session notes — {activeNote.date}</p>
+                  <p className="mt-2 text-sm text-neutral-700 dark:text-neutral-200">{activeNote.note}</p>
+                </div>
+              )}
             </Card>
           </div>
 
@@ -257,7 +276,7 @@ export default function AppointmentsPage() {
           <>
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setShowModal(false)}
+              onClick={closeBooking}
               className="fixed inset-0 bg-neutral-900/60 backdrop-blur-sm z-50"
             />
             <motion.div
@@ -271,9 +290,9 @@ export default function AppointmentsPage() {
                 <div className="bg-gradient-to-r from-primary-600 to-secondary-600 px-6 py-5 flex items-center justify-between">
                   <div className="flex items-center gap-3 text-white">
                     <CalendarClock className="w-6 h-6" />
-                    <h3 className="font-bold text-lg">Book Appointment</h3>
+                    <h3 className="font-bold text-lg">{editingId ? 'Reschedule Appointment' : 'Book Appointment'}</h3>
                   </div>
-                  <button onClick={() => setShowModal(false)} className="text-white/80 hover:text-white p-1">
+                  <button onClick={closeBooking} className="text-white/80 hover:text-white p-1" aria-label="Close appointment form">
                     <X className="w-5 h-5" />
                   </button>
                 </div>
@@ -321,12 +340,12 @@ export default function AppointmentsPage() {
                   <div className="flex gap-3 pt-2">
                     <button
                       type="button"
-                      onClick={() => setShowModal(false)}
+                      onClick={closeBooking}
                       className="flex-1 px-4 py-2.5 rounded-xl font-semibold text-sm text-neutral-600 dark:text-neutral-300 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition"
                     >
                       Cancel
                     </button>
-                    <GradientButton type="submit" className="flex-1">Confirm Booking</GradientButton>
+                    <GradientButton type="submit" className="flex-1">{editingId ? 'Save New Time' : 'Confirm Booking'}</GradientButton>
                   </div>
                 </form>
               </div>

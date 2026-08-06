@@ -1,13 +1,22 @@
-"""Database connection and collections."""
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+"""Database connection and collection lifecycle.
+
+PyMongo's native asyncio driver is used instead of Motor.  Motor is now in
+deprecated maintenance mode, while ``AsyncMongoClient`` is the supported
+asyncio path for new deployments.
+"""
+import asyncio
+from typing import Any, Optional
+
+from pymongo import AsyncMongoClient
+from fastapi import HTTPException, status
 from .config import settings
 
 
 class Database:
     """MongoDB database manager."""
     
-    client: AsyncIOMotorClient = None
-    db: AsyncIOMotorDatabase = None
+    client: Optional[AsyncMongoClient] = None
+    db: Any = None
     connected: bool = False
 
 
@@ -15,16 +24,14 @@ db_manager = Database()
 
 
 async def connect_to_mongo():
-    """Connect to MongoDB Atlas. Non-fatal on startup — if the IP is not whitelisted,
-    the server still starts; DB-dependent endpoints will return 503 instead of crashing."""
+    """Connect to MongoDB Atlas and build the indexes used by the API."""
     try:
-        # tlsAllowInvalidCertificates helps with some Atlas SSL issues on Windows
-        db_manager.client = AsyncIOMotorClient(
+        db_manager.client = AsyncMongoClient(
             settings.MONGODB_URL,
             serverSelectionTimeoutMS=10000,
             connectTimeoutMS=10000,
             socketTimeoutMS=20000,
-            tlsAllowInvalidCertificates=True,
+            tlsAllowInvalidCertificates=settings.MONGODB_TLS_ALLOW_INVALID_CERTIFICATES,
         )
         db_manager.db = db_manager.client[settings.DB_NAME]
 
@@ -58,24 +65,59 @@ async def connect_to_mongo():
         await db_manager.db.audit_logs.create_index("action")
         await db_manager.db.password_resets.create_index("email")
         await db_manager.db.saved_reports.create_index("user_id")
+        await db_manager.db.interactive_sessions.create_index([("user_id", 1), ("created_at", -1)])
 
         db_manager.connected = True
-        print("[OK] Connected to MongoDB Atlas")
+        print("[OK] Connected to MongoDB")
 
     except Exception as e:
         db_manager.connected = False
-        print(f"[WARN] MongoDB connection failed: {e}")
-        print("[INFO] Server starting anyway — fix MongoDB Atlas IP whitelist to enable DB features.")
-        print("[INFO] Go to: https://cloud.mongodb.com -> Network Access -> Add IP: 0.0.0.0/0")
+        db_manager.db = None
+        print(f"[WARN] MongoDB connection failed: {type(e).__name__}")
+        if settings.APP_ENV in {"production", "prod"}:
+            print("[WARN] API is live but readiness remains unavailable until MongoDB is reachable.")
+        else:
+            print("[INFO] Local development can continue without MongoDB; DB routes return an error.")
 
 
 async def close_mongo_connection():
     """Close MongoDB connection."""
     if db_manager.client:
-        db_manager.client.close()
+        await db_manager.client.close()
+        db_manager.connected = False
         print("[INFO] Closed MongoDB connection")
 
 
-def get_database() -> AsyncIOMotorDatabase:
-    """Get database instance."""
+async def ensure_database() -> Any:
+    """Return a live database handle, reconnecting stale Atlas connections.
+
+    A process can remain alive while an idle MongoDB connection has been
+    dropped by the network or Atlas.  Checking only ``connected`` is not
+    enough, so every state-changing request gets a cheap ping first.
+    """
+    for attempt in range(3):
+        if db_manager.db is not None and db_manager.connected:
+            try:
+                await db_manager.client.admin.command("ping")
+                return db_manager.db
+            except Exception:
+                db_manager.connected = False
+                await close_mongo_connection()
+
+        await connect_to_mongo()
+        if db_manager.connected:
+            return db_manager.db
+        if attempt < 2:
+            await asyncio.sleep(0.5 * (attempt + 1))
+
+    return get_database()
+
+
+def get_database() -> Any:
+    """Get the verified database or return a clear service-unavailable error."""
+    if db_manager.db is None or not db_manager.connected:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database unavailable. Configure MongoDB and try again.",
+        )
     return db_manager.db

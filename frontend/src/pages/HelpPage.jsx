@@ -8,12 +8,13 @@ import toast from 'react-hot-toast'
 import DashboardLayout from '../components/layout/DashboardLayout'
 import { Card, SectionTitle, GradientButton } from '../components/ui'
 import { contactAPI } from '../services/api'
+import { useNavigate } from 'react-router-dom'
 
 const QUICK_ACTIONS = [
-  { icon: Rocket, title: 'Getting Started', desc: 'Set up your child profile and first session', color: 'from-primary-500 to-indigo-600' },
-  { icon: Video, title: 'Video Tutorials', desc: 'Watch step-by-step walkthroughs', color: 'from-secondary-500 to-cyan-600' },
-  { icon: MessageCircle, title: 'Contact Support', desc: 'Reach our team for direct help', color: 'from-accent-500 to-emerald-600' },
-  { icon: Users, title: 'Community', desc: 'Connect with other parents', color: 'from-gold-400 to-amber-500' },
+  { icon: Rocket, title: 'Getting Started', desc: 'Set up your child profile and first session', color: 'from-primary-500 to-indigo-600', target: 'faq' },
+  { icon: Video, title: 'Video Tutorials', desc: 'Watch step-by-step walkthroughs', color: 'from-secondary-500 to-cyan-600', path: '/videos' },
+  { icon: MessageCircle, title: 'Contact Support', desc: 'Reach our team for direct help', color: 'from-accent-500 to-emerald-600', target: 'contact-support' },
+  { icon: Users, title: 'Community', desc: 'Connect with other parents', color: 'from-gold-400 to-amber-500', path: '/parent' },
 ]
 
 const FAQS = [
@@ -34,6 +35,14 @@ const ARTICLES = [
   'Tips for keeping sessions calm & engaging',
   'Earning and redeeming reward stars',
 ]
+
+const ARTICLE_CONTENT = {
+  'Setting up camera & microphone permissions': 'Use Chrome or Edge, open the lock icon beside the address, allow Camera and Microphone, then reload the activity. You can always choose the camera-free or screen-control option.',
+  'Understanding the 6 Tamil lesson roadmap': 'Open Training, choose a lesson, and move through the picture, demonstration, movement practice, speech check, and reward steps at your child’s pace.',
+  'Reading your child\'s progress report': 'Progress shows completed lessons and current totals. Reports groups the available speech and practice data by time period without inventing missing results.',
+  'Tips for keeping sessions calm & engaging': 'Keep sessions short, use Calm mode, allow breaks, and celebrate attempts. A child can pause or use supported response choices at any time.',
+  'Earning and redeeming reward stars': 'Stars are awarded after completed practice. Open Rewards to review the current balance, streaks, and available milestones.',
+}
 
 function FaqItem({ item, open, onToggle }) {
   return (
@@ -62,8 +71,10 @@ function FaqItem({ item, open, onToggle }) {
 }
 
 export default function HelpPage() {
+  const navigate = useNavigate()
   const [query, setQuery] = useState('')
   const [openId, setOpenId] = useState(0)
+  const [selectedArticle, setSelectedArticle] = useState(null)
   const [contact, setContact] = useState({ name: '', email: '', subject: '', message: '' })
   const [sending, setSending] = useState(false)
 
@@ -72,6 +83,18 @@ export default function HelpPage() {
     if (!q) return FAQS
     return FAQS.filter((f) => f.q.toLowerCase().includes(q) || f.a.toLowerCase().includes(q) || f.tag.toLowerCase().includes(q))
   }, [query])
+
+  const openQuickAction = (action) => {
+    if (action.path) {
+      navigate(action.path)
+      return
+    }
+    if (action.target === 'faq') {
+      setQuery('first therapy session')
+      setOpenId(0)
+    }
+    document.getElementById(action.target)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -127,7 +150,7 @@ export default function HelpPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05 }}
             whileHover={{ y: -4 }}
-            onClick={() => toast(a.title, { icon: '💡' })}
+            onClick={() => openQuickAction(a)}
             className="text-left bg-white dark:bg-neutral-900 rounded-2xl p-5 border border-neutral-100 dark:border-neutral-800 shadow-md hover:shadow-lg transition"
           >
             <div className={`w-12 h-12 bg-gradient-to-br ${a.color} rounded-xl flex items-center justify-center mb-4 shadow-md`}>
@@ -141,7 +164,7 @@ export default function HelpPage() {
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* FAQ */}
-        <div className="lg:col-span-2">
+        <div id="faq" className="lg:col-span-2 scroll-mt-24">
           <SectionTitle title="Frequently Asked Questions" subtitle={`${filtered.length} result${filtered.length === 1 ? '' : 's'}`} icon={HelpCircle} />
           <div className="space-y-3">
             {filtered.length === 0 ? (
@@ -158,7 +181,7 @@ export default function HelpPage() {
 
         {/* Sidebar: contact + channels + articles */}
         <div className="space-y-6">
-          <Card className="p-6">
+          <Card id="contact-support" className="p-6 scroll-mt-24">
             <SectionTitle title="Contact Support" icon={Send} />
             <form onSubmit={handleSubmit} className="space-y-3">
               <input
@@ -219,7 +242,8 @@ export default function HelpPage() {
               {ARTICLES.map((a) => (
                 <button
                   key={a}
-                  onClick={() => toast(a, { icon: '📄' })}
+                  onClick={() => setSelectedArticle(selectedArticle === a ? null : a)}
+                  aria-expanded={selectedArticle === a}
                   className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-sm text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition group"
                 >
                   <span className="flex items-center gap-2.5 text-left"><FileText className="w-4 h-4 text-secondary-500 shrink-0" /> {a}</span>
@@ -227,6 +251,20 @@ export default function HelpPage() {
                 </button>
               ))}
             </div>
+            <AnimatePresence mode="wait">
+              {selectedArticle && (
+                <motion.div
+                  key={selectedArticle}
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mt-4 rounded-xl bg-primary-50 dark:bg-primary-900/20 p-4 text-sm leading-relaxed text-neutral-700 dark:text-neutral-200"
+                >
+                  <strong className="block mb-1">{selectedArticle}</strong>
+                  {ARTICLE_CONTENT[selectedArticle]}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </Card>
         </div>
       </div>

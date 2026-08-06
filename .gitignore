@@ -1,25 +1,45 @@
+# Local tools and editors
+.claude/
+.vscode/
+.idea/
+*.iml
+.DS_Store
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+
+# Python / backend
 .venv/
 backend/venv/
-frontend/node_modules/
-*.pyc
-__pycache__/
-.DS_Store
-.vscode/
-# Large files exceeding GitHub 100MB limit
-all_literature_surveypapers/prosody.pdf
+backend/.env
+backend/uploads/
+uploads/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
 
-# Mitra (new stack)
-mitra-backend/venv/
-mitra-backend/.env
-mitra-backend/uploads/
-mitra-backend/*.log
-mitra-frontend/node_modules/
-mitra-frontend/.next/
-mitra-frontend/.env.local
-mitra-frontend/tsconfig.tsbuildinfo
-mitra-flutter/build/
-mitra-flutter/.dart_tool/
-mitra-flutter/ios/Pods/
-*.log
-mitra-flutter/android/.gradle/
-.claude/
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+npm-debug.log*
+.qa-screenshots/
+
+# Android / Gradle
+SpeakEasyAndroid/.gradle/
+SpeakEasyAndroid/local.properties
+SpeakEasyAndroid/.idea/
+SpeakEasyAndroid/build/
+SpeakEasyAndroid/app/build/
+SpeakEasyAndroid/captures/
+SpeakEasyAndroid/.externalNativeBuild/
+SpeakEasyAndroid/.cxx/
+*.apk
+*.aab

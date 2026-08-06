@@ -46,13 +46,13 @@ function MatrixRain() {
 export default function AdminLoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isChecking, setIsChecking] = useState(true)
-  const { isAuthenticated, user, token } = useAuthStore()
+  const { isAuthenticated, user, authReady } = useAuthStore()
   const setAuth = useAuthStore((state) => state.setAuth)
   const navigate = useNavigate()
   
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (isAuthenticated && user && token) {
+      if (authReady && isAuthenticated && user) {
         if (user.role === 'admin') navigate('/admin', { replace: true })
         else navigate('/dashboard', { replace: true })
       } else {
@@ -60,7 +60,7 @@ export default function AdminLoginPage() {
       }
     }, 50)
     return () => clearTimeout(timer)
-  }, [isAuthenticated, user, token, navigate])
+  }, [authReady, isAuthenticated, user, navigate])
   
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(adminLoginSchema)

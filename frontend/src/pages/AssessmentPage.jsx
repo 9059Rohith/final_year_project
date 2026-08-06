@@ -323,10 +323,10 @@ export default function AssessmentPage() {
                     <RotateCcw className="w-4 h-4" /> Retake
                   </button>
                   <GradientButton
-                    onClick={() => { toast.success('Loading next lesson…'); backToStart() }}
+                    onClick={backToStart}
                     className="flex-1"
                   >
-                    Next Lesson <ArrowRight className="w-4 h-4" />
+                    Choose Another Assessment <ArrowRight className="w-4 h-4" />
                   </GradientButton>
                 </div>
               </Card>

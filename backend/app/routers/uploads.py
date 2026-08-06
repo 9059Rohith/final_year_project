@@ -1,21 +1,14 @@
-"""Uploads router — generic file uploads (avatars, attachments, recordings).
-
-Stores files under a local ``uploads/`` directory and records metadata. In
-production this would proxy to Cloudinary (config already present); here it
-persists locally and returns a served URL.
-"""
-import os
-import secrets
+"""Uploads router for durable user media."""
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from typing import Optional
+from ..config import settings
 from ..database import get_database
+from ..services.media_storage import get_media_storage
 from ..utils.jwt_handler import get_current_user
 from ..utils.mongo import serialize, paginate, oid, now
 
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
 
-UPLOAD_DIR = os.path.join(os.getcwd(), "uploads")
-MAX_BYTES = 10 * 1024 * 1024
 ALLOWED = {"image/png", "image/jpeg", "image/webp", "image/gif", "audio/wav", "audio/webm", "audio/mpeg", "application/pdf"}
 
 
@@ -25,22 +18,22 @@ async def upload_file(
     purpose: str = Form(default="general"),
     current_user: dict = Depends(get_current_user),
 ):
-    """Upload a file (max 10 MB, whitelisted types)."""
+    """Upload a file to Cloudinary in production or local disk in development."""
     if file.content_type not in ALLOWED:
         raise HTTPException(status_code=400, detail=f"Unsupported type: {file.content_type}")
     data = await file.read()
-    if len(data) > MAX_BYTES:
+    if len(data) > settings.MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="File too large (max 10 MB)")
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-    ext = os.path.splitext(file.filename or "")[1][:10]
-    stored_name = f"{secrets.token_hex(12)}{ext}"
-    with open(os.path.join(UPLOAD_DIR, stored_name), "wb") as f:
-        f.write(data)
+    try:
+        storage = get_media_storage()
+        stored = await storage.save(data, file.filename or "upload", file.content_type or "application/octet-stream", str(current_user["_id"]), purpose)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     db = get_database()
     doc = {
-        "user_id": str(current_user["_id"]), "original_name": file.filename, "stored_name": stored_name,
+        "user_id": str(current_user["_id"]), "original_name": file.filename, **stored,
         "content_type": file.content_type, "size": len(data), "purpose": purpose,
-        "url": f"/uploads/{stored_name}", "created_at": now(),
+        "created_at": now(),
     }
     result = await db.uploads.insert_one(doc)
     doc["_id"] = result.inserted_id
@@ -62,8 +55,8 @@ async def delete_upload(upload_id: str, current_user: dict = Depends(get_current
     if not doc:
         raise HTTPException(status_code=404, detail="Upload not found")
     try:
-        os.remove(os.path.join(UPLOAD_DIR, doc["stored_name"]))
-    except OSError:
-        pass
+        await get_media_storage().delete(doc)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     await db.uploads.delete_one({"_id": oid(upload_id)})
     return {"message": "Deleted"}

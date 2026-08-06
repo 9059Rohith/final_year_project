@@ -1,9 +1,4 @@
-"""Auth extras — password reset (OTP), email verification, sessions, refresh.
-
-Complements the core auth router. OTPs are hashed at rest. In production the OTP
-would be emailed/SMSed; here it is also returned as ``dev_otp`` so the flow is
-testable without a mail provider wired up.
-"""
+"""Auth extras — password reset (OTP), email verification, sessions, refresh."""
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel, EmailStr, Field
 from datetime import timedelta
@@ -32,7 +27,7 @@ class VerifyOtpRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     email: EmailStr
     otp: str
-    new_password: str = Field(min_length=6)
+    new_password: str = Field(min_length=10)
 
 
 def _hash(value: str) -> str:
@@ -60,8 +55,12 @@ async def forgot_password(payload: ForgotPasswordRequest):
         "email": payload.email, "otp_hash": _hash(otp),
         "expires_at": now() + timedelta(minutes=10), "used": False, "created_at": now(),
     })
-    # TODO: send `otp` via email provider. Returned here for dev/testing only.
-    return {"message": "If that email exists, an OTP has been sent.", "dev_otp": otp}
+    # A mail provider can be added without changing the public response. Never
+    # expose the code on a production deployment.
+    result = {"message": "If that email exists, an OTP has been sent."}
+    if settings.EXPOSE_DEV_CODES:
+        result["dev_otp"] = otp
+    return result
 
 
 @router.post("/verify-otp")
@@ -98,7 +97,10 @@ async def request_email_verification(current_user: dict = Depends(get_current_us
         "user_id": str(current_user["_id"]), "otp_hash": _hash(otp),
         "expires_at": now() + timedelta(minutes=15), "created_at": now(),
     })
-    return {"message": "Verification code sent", "dev_otp": otp}
+    result = {"message": "Verification code sent"}
+    if settings.EXPOSE_DEV_CODES:
+        result["dev_otp"] = otp
+    return result
 
 
 @router.post("/verify-email/confirm")

@@ -24,7 +24,8 @@ class _FakeRequest:
 
 
 def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    # Python 3.12 no longer creates an implicit loop for synchronous callers.
+    return asyncio.run(coro)
 
 
 def setup_function():

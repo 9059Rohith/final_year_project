@@ -4,6 +4,9 @@ import { useNavigate } from 'react-router-dom'
 import ChildFeedback from '../components/interactive/ChildFeedback'
 import InteractiveSessionShell from '../components/interactive/InteractiveSessionShell'
 import MouthGuideOverlay from '../components/interactive/MouthGuideOverlay'
+import { CelebrationLayer, TamilStatus } from '../components/interactive/SceneEffects'
+import { getEffectProfile, getTamilPrompt } from '../features/interactive/animationPresentation'
+import { createSceneAudioController } from '../features/interactive/sceneAudio'
 import { classifyMouthTarget, createHoldTracker } from '../features/mouthMirror/mouthGeometry'
 import { MOUTH_MIRROR_ACTIVITY, MOUTH_TARGETS } from '../features/mouthMirror/targets'
 import { createSession, sessionReducer } from '../features/interactive/sessionEngine'
@@ -24,6 +27,9 @@ export default function MouthMirrorPage() {
   const attemptsRef = useRef(0)
   const assistanceRef = useRef({ ...EMPTY_ASSISTANCE })
   const completedRef = useRef(false)
+  const sceneAudioRef = useRef(null)
+  const audioActivatedRef = useRef(false)
+  const previousModeRef = useRef('gate')
   const [session, dispatch] = useReducer(sessionReducer, MOUTH_MIRROR_ACTIVITY, createSession)
   const [mode, setMode] = useState('gate')
   const [cameraError, setCameraError] = useState('')
@@ -31,6 +37,18 @@ export default function MouthMirrorPage() {
   const { preferences, updatePreference } = useInteractionSettingsStore()
   const { faceData, startDetection, stopDetection } = useFaceDetection(videoRef, canvasRef)
   const target = MOUTH_TARGETS[session.stepIndex] || MOUTH_TARGETS.at(-1)
+  const effectProfile = getEffectProfile(preferences)
+  const mirrorVisualState = mode === 'success'
+    ? 'matched'
+    : mode === 'camera' && faceData.faceDetected && match.progress > 0
+      ? 'close'
+      : mode === 'camera' && faceData.faceDetected
+        ? 'retry'
+        : mode === 'model'
+          ? 'model'
+          : 'waiting'
+
+  if (!sceneAudioRef.current && typeof window !== 'undefined') sceneAudioRef.current = createSceneAudioController(window)
 
   const stopCamera = () => {
     stopDetection()
@@ -39,7 +57,23 @@ export default function MouthMirrorPage() {
     if (videoRef.current) videoRef.current.srcObject = null
   }
 
-  useEffect(() => () => stopCamera(), [])
+  useEffect(() => () => {
+    stopCamera()
+    sceneAudioRef.current?.stop()
+  }, [])
+
+  useEffect(() => {
+    const previous = previousModeRef.current
+    previousModeRef.current = mode
+    if (mode !== 'success' || previous === 'success' || !audioActivatedRef.current) return
+    const prompt = getTamilPrompt('mouth-mirror', 'matched')
+    sceneAudioRef.current?.speakTamil(prompt, { enabled: preferences.soundEnabled && preferences.spokenPrompts, activated: true })
+    sceneAudioRef.current?.playEffect('sparkle', { enabled: preferences.soundEnabled, activated: true })
+  }, [mode, preferences.soundEnabled, preferences.spokenPrompts])
+
+  useEffect(() => {
+    if (!preferences.soundEnabled) sceneAudioRef.current?.stop()
+  }, [preferences.soundEnabled])
 
   useEffect(() => {
     if (mode !== 'camera' || !faceData.faceDetected || completedRef.current) {
@@ -69,6 +103,7 @@ export default function MouthMirrorPage() {
   }, [faceData, mode, target])
 
   const startCamera = async () => {
+    audioActivatedRef.current = true
     setCameraError('')
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
@@ -99,6 +134,7 @@ export default function MouthMirrorPage() {
   }
 
   const useModelOnly = () => {
+    audioActivatedRef.current = true
     stopCamera()
     holdRef.current.reset()
     completedRef.current = false
@@ -163,7 +199,14 @@ export default function MouthMirrorPage() {
 
         {['camera', 'model', 'success'].includes(mode) ? (
           <div className={`mirror-stage ${mode === 'model' ? 'is-model-only' : ''}`}>
-            <MouthGuideOverlay target={target} matched={match.matched || mode === 'success'} progress={mode === 'success' ? 1 : match.progress} />
+            <MouthGuideOverlay
+              target={target}
+              matched={match.matched || mode === 'success'}
+              progress={mode === 'success' ? 1 : match.progress}
+              visualState={mirrorVisualState}
+              motionLevel={preferences.motionLevel}
+            />
+            {mode === 'success' ? <CelebrationLayer variant="mirror-stars" state="matched" effectProfile={effectProfile} /> : null}
             {mode !== 'model' ? (
               <div className="mirror-camera">
                 <video ref={videoRef} autoPlay muted playsInline />
@@ -175,7 +218,8 @@ export default function MouthMirrorPage() {
               <div className="mirror-model-message"><CameraOff aria-hidden="true" /><strong>No camera is running</strong><span>Copy the friendly model at your own pace.</span></div>
             )}
             <div className="mirror-feedback">
-              {mode === 'success' ? <ChildFeedback kind="success" title="Shape held!" detail="That mouth movement was steady." /> : <ChildFeedback title={target.label} detail={mode === 'camera' ? (faceData.faceDetected ? match.cue : 'The mirror is waiting for your face.') : 'A grown-up can tap when the shape is ready.'} />}
+              {mode === 'success' ? <ChildFeedback kind="success" title={getTamilPrompt('mouth-mirror', 'matched')} detail="Shape held! That mouth movement was steady." /> : <ChildFeedback title={target.label} detail={mode === 'camera' ? (faceData.faceDetected ? match.cue : 'The mirror is waiting for your face.') : 'A grown-up can tap when the shape is ready.'} />}
+              <TamilStatus label={mirrorVisualState === 'retry' ? getTamilPrompt('mouth-mirror', 'retry') : mirrorVisualState === 'matched' ? getTamilPrompt('mouth-mirror', 'matched') : ''} />
               <div className="mirror-actions">
                 {mode === 'success' ? <button className="interactive-control mirror-button mirror-button--primary" type="button" onClick={() => advance('independent')}><Check aria-hidden="true" /> Next shape</button> : null}
                 {mode === 'model' ? <button className="interactive-control mirror-button mirror-button--primary" type="button" onClick={() => advance('modelled')}><Check aria-hidden="true" /> I copied it</button> : null}
@@ -188,6 +232,8 @@ export default function MouthMirrorPage() {
         {mode === 'complete' ? (
           <div className="mirror-gate mirror-gate--complete">
             <span className="mirror-gate__icon">5</span>
+            <div className="mirror-complete-stars" aria-hidden="true"><i>★</i><i>★</i><i>★</i><i>★</i><i>★</i></div>
+            <CelebrationLayer variant="mirror-stars" state="complete" effectProfile={effectProfile} />
             <ChildFeedback kind="success" title="Mouth Mirror complete!" detail="You copied five useful speech shapes. No camera frames were saved." />
             <button className="interactive-control mirror-button mirror-button--primary" type="button" onClick={() => navigate('/play')}>Choose another adventure</button>
           </div>

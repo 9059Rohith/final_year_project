@@ -1,193 +1,319 @@
-import { useEffect, useReducer, useRef, useState } from 'react'
-import { Check, HelpCircle, Mic, Square, Trees, Waves, Wind } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
-import ChildFeedback from '../components/interactive/ChildFeedback'
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { BookOpen, Ear, HelpCircle, Mic, RotateCcw, Sparkles, Square, Volume2 } from 'lucide-react'
+import KaviStorybookScene from '../components/storybook/KaviStorybookScene'
 import InteractiveSessionShell from '../components/interactive/InteractiveSessionShell'
-import QuestScene from '../components/interactive/QuestScene'
-import {
-  RIVER_RESCUE_ACTIVITY,
-  buildRiverRescueReport,
-  evaluateQuestResponse,
-  getQuestCopy,
-} from '../features/quest/riverRescueActivity'
+import { TamilStatus } from '../components/interactive/SceneEffects'
+import { createStoryNarrator } from '../features/characters/characterVoice'
 import { readAnalyserLevel } from '../features/interactive/audioLevel'
-import { createSession, sessionReducer } from '../features/interactive/sessionEngine'
+import { getEffectProfile, getTamilPrompt } from '../features/interactive/animationPresentation'
+import { createSceneAudioController } from '../features/interactive/sceneAudio'
+import {
+  KAVI_STORY_PAGES,
+  buildKaviStoryReport,
+  createKaviStoryState,
+  getKaviPage,
+  kaviStoryReducer,
+} from '../features/storybook/kaviStory'
 import { useAudioRecorder } from '../hooks/useAudioRecorder'
-import { interactiveSessionsAPI } from '../services/api'
+import { evaluationAPI, interactiveSessionsAPI, storyVoiceAPI } from '../services/api'
 import { useInteractionSettingsStore } from '../store/interactionSettingsStore'
 
-const EMPTY_ASSISTANCE = { independent: 0, verbal_prompt: 0, visual_prompt: 0, modelled: 0, skipped: 0 }
+const FEEDBACK = {
+  wonderful: 'அருமை! மிக அழகாகச் சொன்னீர்கள்!',
+  almost: 'நன்றாக முயன்றீர்கள்! இன்னொரு முறை மெதுவாகச் சொல்லலாமா?',
+  try_together: 'கவியுடன் சேர்ந்து மெதுவாகச் சொல்லலாம்.',
+  model_unavailable: 'நான் கேட்கிறேன். படத்தைப் பார்த்து நாமே சேர்ந்து சொல்லலாம்.',
+  audio_unavailable: 'ஒலி தெளிவாகக் கேட்கவில்லை. படத்துடன் சேர்ந்து சொல்லலாம்.',
+  complete: 'அருமை! கவி பாலத்தைக் கடந்துவிட்டான்!',
+}
+
+const TAMIL_SHELL_LABELS = {
+  locale: 'ta',
+  playPractice: 'விளையாடிப் பழகலாம்',
+  exit: 'வெளியே செல்லுங்கள்',
+  calm: 'அமைதி',
+  settings: 'வசதி அமைப்புகள்',
+  resume: 'தொடருங்கள்',
+  pause: 'இடைநிறுத்துங்கள்',
+}
+
+function moodFor(phase, isSpeaking) {
+  if (isSpeaking || phase === 'narrating') return 'speaking'
+  if (phase === 'listening' || phase === 'evaluating') return 'listening'
+  if (phase === 'success' || phase === 'complete') return 'celebrate'
+  if (phase === 'support') return 'encourage'
+  if (phase === 'walking') return 'walking'
+  if (phase === 'ready') return 'ready'
+  return 'idle'
+}
 
 export default function RiverRescuePage() {
-  const navigate = useNavigate()
-  const [session, dispatch] = useReducer(sessionReducer, RIVER_RESCUE_ACTIVITY, createSession)
-  const [mode, setMode] = useState('prompt')
-  const [chosenPath, setChosenPath] = useState(null)
-  const [attempt, setAttempt] = useState(0)
-  const [message, setMessage] = useState('Kavi needs a kind helper!')
-  const [bridgeProgress, setBridgeProgress] = useState(0)
-  const startedAtRef = useRef(Date.now())
-  const attemptsRef = useRef(0)
-  const successesRef = useRef(0)
-  const assistanceRef = useRef({ ...EMPTY_ASSISTANCE })
-  const airflowRef = useRef(0)
-  const { transcript, isRecording, analyserRef, startRecording, stopRecording, resetRecording } = useAudioRecorder()
+  const [state, dispatch] = useReducer(kaviStoryReducer, undefined, () => createKaviStoryState(Date.now()))
+  const [isSpeaking, setIsSpeaking] = useState(false)
+  const [audioLevel, setAudioLevel] = useState(0)
+  const [walkingProgress, setWalkingProgress] = useState(0)
+  const submittedBlobRef = useRef(null)
+  const reportSentRef = useRef(false)
+  const narratorRef = useRef(null)
+  const feedbackSpokenRef = useRef('')
+  const sceneAudioRef = useRef(null)
+  const sceneAudioActivatedRef = useRef(false)
+  const previousScenePhaseRef = useRef('intro')
   const { preferences } = useInteractionSettingsStore()
-  const step = RIVER_RESCUE_ACTIVITY.steps[session.stepIndex] || RIVER_RESCUE_ACTIVITY.steps.at(-1)
-  const copy = getQuestCopy(step.id, preferences.ageBand)
+  const {
+    isRecording,
+    audioBlob,
+    analyserRef,
+    startRecording,
+    stopRecording,
+    resetRecording,
+  } = useAudioRecorder()
+  const page = getKaviPage(state)
+  const effectProfile = getEffectProfile(preferences)
+  const animationPrompt = state.phase === 'intro'
+    ? getTamilPrompt('river-rescue', 'intro')
+    : state.phase === 'support'
+      ? getTamilPrompt('river-rescue', 'retry')
+      : state.phase === 'success'
+        ? getTamilPrompt('river-rescue', 'success')
+        : state.phase === 'complete'
+          ? getTamilPrompt('river-rescue', 'complete')
+          : ''
+
+  if (!sceneAudioRef.current && typeof window !== 'undefined') sceneAudioRef.current = createSceneAudioController(window)
+
+  const shellState = useMemo(() => ({ ...state, stepIndex: state.pageIndex }), [state])
 
   useEffect(() => {
-    dispatch({ type: 'START', at: Date.now() })
-    dispatch({ type: 'PROMPT_FINISHED', at: Date.now() })
+    narratorRef.current = createStoryNarrator({
+      scope: window,
+      loadAudio: async (lineId) => (await storyVoiceAPI.get(lineId)).data,
+      preferNative: true,
+    })
+    return () => {
+      narratorRef.current?.stop()
+      sceneAudioRef.current?.stop()
+    }
   }, [])
 
   useEffect(() => {
-    if (!preferences.spokenPrompts || !copy?.prompt || !window.speechSynthesis) return undefined
-    window.speechSynthesis.cancel()
-    const utterance = new SpeechSynthesisUtterance(copy.prompt)
-    utterance.rate = preferences.sessionPace === 'guided' ? 0.85 : 1
-    utterance.lang = 'en-IN'
-    window.speechSynthesis.speak(utterance)
-    return () => window.speechSynthesis.cancel()
-  }, [copy?.prompt, preferences.sessionPace, preferences.spokenPrompts])
-
-  useEffect(() => () => resetRecording(), [resetRecording])
+    const previous = previousScenePhaseRef.current
+    previousScenePhaseRef.current = state.phase
+    if (state.phase === previous || !sceneAudioActivatedRef.current || !preferences.soundEnabled) return
+    if (state.phase === 'success') sceneAudioRef.current?.playEffect('water', { enabled: true, activated: true })
+    if (state.phase === 'complete') sceneAudioRef.current?.playEffect('sparkle', { enabled: true, activated: true })
+  }, [preferences.soundEnabled, state.phase])
 
   useEffect(() => {
-    if (!isRecording || step.responseMode !== 'airflow') return undefined
-    let last = performance.now()
-    const timer = window.setInterval(() => {
-      const now = performance.now()
-      const level = readAnalyserLevel(analyserRef.current) * 2.4
-      if (level > 0.1) airflowRef.current += now - last
-      last = now
-      setBridgeProgress(Math.min(1, airflowRef.current / step.targetDurationMs))
-    }, 60)
-    return () => window.clearInterval(timer)
-  }, [analyserRef, isRecording, step.responseMode, step.targetDurationMs])
+    if (!preferences.soundEnabled) sceneAudioRef.current?.stop()
+  }, [preferences.soundEnabled])
 
-  const recordAssistance = (level) => {
-    assistanceRef.current[level] += 1
-  }
-
-  const finishQuest = (lastIndependent = false) => {
-    const completedAt = Date.now()
-    const assistance = { ...assistanceRef.current }
-    if (lastIndependent) assistance.independent += 1
-    const report = buildRiverRescueReport({
-      startedAt: startedAtRef.current,
-      completedAt,
-      turns: RIVER_RESCUE_ACTIVITY.steps.length,
-      successes: successesRef.current + (lastIndependent ? 1 : 0),
-      attempts: attemptsRef.current,
-      assistance,
-      effortPoints: session.effortPoints + (lastIndependent ? step.reward : 0),
+  const narrate = (storyPage = page) => {
+    narratorRef.current?.stop()
+    setIsSpeaking(true)
+    dispatch({ type: 'NARRATION_STARTED' })
+    const finish = () => {
+      setIsSpeaking(false)
+      dispatch({ type: 'NARRATION_ENDED' })
+    }
+    if (!preferences.soundEnabled || !preferences.spokenPrompts) {
+      finish()
+      return
+    }
+    narratorRef.current?.play({
+      lineId: storyPage.lineId,
+      text: storyPage.narration,
+      voiceOptions: { guided: preferences.sessionPace === 'guided', enabled: true },
+      onStart: () => setIsSpeaking(true),
+      onEnd: finish,
+      onError: finish,
     })
-    assistanceRef.current = assistance
-    interactiveSessionsAPI.create(report).catch(() => {})
-    setMode('complete')
-    setMessage('We crossed the river together!')
   }
 
-  const advance = (assistance = 'independent') => {
-    const independent = assistance === 'independent'
-    if (independent) successesRef.current += 1
-    recordAssistance(assistance)
-    dispatch({ type: 'EVALUATION_SUCCEEDED', assistance, at: Date.now() })
-    if (session.stepIndex >= RIVER_RESCUE_ACTIVITY.steps.length - 1) {
-      // Remove the increment already made above so finishQuest can build once.
-      if (independent) successesRef.current -= 1
-      assistanceRef.current[assistance] -= 1
-      finishQuest(independent)
-      dispatch({ type: 'COMPLETE', at: Date.now() })
-      return
+  useEffect(() => {
+    if (state.phase === 'narrating' && !isSpeaking) narrate(page)
+    // page.id is the stable signal for a newly opened story page.
+  }, [state.phase, page.id])
+
+  useEffect(() => {
+    if (!isRecording) {
+      setAudioLevel(0)
+      return undefined
     }
-    dispatch({ type: 'NEXT_STEP', at: Date.now() })
-    setAttempt(0)
-    setMode('prompt')
-    setBridgeProgress(0)
+    let frame = 0
+    const sample = () => {
+      setAudioLevel(readAnalyserLevel(analyserRef.current))
+      frame = window.requestAnimationFrame(sample)
+    }
+    frame = window.requestAnimationFrame(sample)
+    return () => window.cancelAnimationFrame(frame)
+  }, [analyserRef, isRecording])
+
+  useEffect(() => {
+    if (state.phase !== 'evaluating' || !audioBlob || submittedBlobRef.current === audioBlob) return
+    submittedBlobRef.current = audioBlob
+    const formData = new FormData()
+    formData.append('audio', audioBlob, 'kavi-tamil.webm')
+    formData.append('target_id', page.id)
+    let active = true
+    evaluationAPI.evaluateTamilStory(formData)
+      .then(({ data }) => { if (active) dispatch({ type: 'RESULT', result: data }) })
+      .catch(() => {
+        if (active) dispatch({ type: 'RESULT', result: { capability: 'model_unavailable', feedback_key: 'model_unavailable' } })
+      })
+    return () => { active = false }
+  }, [audioBlob, page.id, state.phase])
+
+  useEffect(() => {
+    if (!state.feedbackKey || !['ready', 'support', 'success', 'complete'].includes(state.phase)) return
+    const feedbackId = `${page.id}:${state.feedbackKey}:${state.pageAttempts}`
+    if (feedbackSpokenRef.current === feedbackId) return
+    feedbackSpokenRef.current = feedbackId
+    const text = FEEDBACK[state.feedbackKey]
+    if (!text || !preferences.soundEnabled) return
+    setIsSpeaking(true)
+    narratorRef.current?.play({
+      lineId: state.feedbackKey,
+      text,
+      voiceOptions: { guided: preferences.sessionPace === 'guided', enabled: true },
+      onStart: () => setIsSpeaking(true),
+      onEnd: () => setIsSpeaking(false),
+      onError: () => setIsSpeaking(false),
+    })
+  }, [page.id, preferences.sessionPace, preferences.soundEnabled, state.feedbackKey, state.pageAttempts, state.phase])
+
+  useEffect(() => {
+    if (state.phase !== 'walking') return undefined
+    setWalkingProgress(0)
+    const startedAt = performance.now()
+    const timer = window.setInterval(() => {
+      const progress = Math.min(1, (performance.now() - startedAt) / 1200)
+      setWalkingProgress(progress)
+      if (progress >= 1) {
+        window.clearInterval(timer)
+        setWalkingProgress(0)
+        resetRecording()
+        submittedBlobRef.current = null
+        dispatch({ type: 'WALK_FINISHED' })
+      }
+    }, 40)
+    return () => window.clearInterval(timer)
+  }, [resetRecording, state.phase])
+
+  useEffect(() => {
+    if (state.phase !== 'complete' || reportSentRef.current) return
+    reportSentRef.current = true
+    interactiveSessionsAPI.create(buildKaviStoryReport({ state, completedAt: Date.now() })).catch(() => {})
+  }, [state])
+
+  useEffect(() => () => {
+    narratorRef.current?.stop()
     resetRecording()
+  }, [resetRecording])
+
+  const beginStory = () => {
+    sceneAudioActivatedRef.current = true
+    dispatch({ type: 'START', startedAt: Date.now() })
   }
 
-  const choose = (choice) => {
-    attemptsRef.current += 1
-    dispatch({ type: 'BEGIN_ATTEMPT', at: Date.now() })
-    dispatch({ type: 'RESPONSE_CAPTURED', response: { choice }, at: Date.now() })
-    if (step.id === 'choose-path') {
-      setChosenPath(choice)
-      setMessage(choice === 'forest' ? 'The forest path is full of butterflies!' : 'The river path sparkles in the sun!')
-    } else setMessage(choice === 'nandri' ? 'Nandri! Thank you, helper!' : 'Hooray! The bridge is safe!')
-    window.setTimeout(() => advance('independent'), 450)
-  }
-
-  const beginResponse = async () => {
-    attemptsRef.current += 1
-    const nextAttempt = attempt + 1
-    setAttempt(nextAttempt)
-    dispatch({ type: 'BEGIN_ATTEMPT', at: Date.now() })
-    if (step.responseMode === 'airflow') airflowRef.current = 0
-    const allowed = await startRecording('ta-IN', { speechRecognition: step.responseMode === 'speech' })
-    if (!allowed) {
-      setMode('support')
-      dispatch({ type: 'CAPABILITY_ERROR', capability: 'microphone', message: 'Use the picture help instead.', at: Date.now() })
-      return
+  const beginListening = async () => {
+    sceneAudioActivatedRef.current = true
+    narratorRef.current?.stop()
+    resetRecording()
+    submittedBlobRef.current = null
+    const allowed = await startRecording('ta-IN', { speechRecognition: true, repeatRecognized: false })
+    if (allowed) dispatch({ type: 'LISTEN' })
+    else {
+      dispatch({ type: 'LISTEN' })
+      dispatch({ type: 'EVALUATE' })
+      dispatch({ type: 'RESULT', result: { capability: 'model_unavailable', feedback_key: 'model_unavailable' } })
     }
-    setMode('listening')
-    setMessage(step.responseMode === 'airflow' ? 'A long, gentle breath lowers the bridge.' : 'Kavi is listening...')
   }
 
-  const checkResponse = () => {
+  const finishListening = () => {
     stopRecording()
-    const response = step.responseMode === 'airflow' ? { durationMs: airflowRef.current } : { transcript }
-    const result = evaluateQuestResponse(step, response, attempt)
-    dispatch({ type: 'RESPONSE_CAPTURED', response: { matched: result.success }, at: Date.now() })
-    if (result.success) {
-      setMessage(step.id === 'lower-bridge' ? 'The bridge is down!' : 'Kavi heard you!')
-      setMode('success')
-    } else {
-      dispatch({ type: 'EVALUATION_RETRY', at: Date.now() })
-      setMode(result.support ? 'support' : 'retry')
-      setMessage(result.support ? 'Let us use a helpful picture together.' : 'Kavi is still listening. Every try helps!')
-    }
+    dispatch({ type: 'EVALUATE' })
   }
 
-  const useHelp = () => {
-    dispatch({ type: 'USE_HINT', assistance: 'visual_prompt', at: Date.now() })
-    setMessage('The picture helped Kavi understand!')
-    advance('visual_prompt')
+  const resetStory = () => {
+    narratorRef.current?.stop()
+    resetRecording()
+    submittedBlobRef.current = null
+    reportSentRef.current = false
+    sceneAudioRef.current?.stop()
+    sceneAudioActivatedRef.current = false
+    dispatch({ type: 'RESET' })
   }
 
-  const responseControls = () => {
-    if (mode === 'listening') return <button className="interactive-control quest-button quest-button--stop" type="button" onClick={checkResponse}><Square aria-hidden="true" /> {step.responseMode === 'airflow' ? 'Check bridge' : 'I finished'}</button>
-    if (mode === 'success') return <button className="interactive-control quest-button quest-button--primary" type="button" onClick={() => advance('independent')}><Check aria-hidden="true" /> Keep going</button>
-    if (mode === 'retry') return <><button className="interactive-control quest-button quest-button--primary" type="button" onClick={beginResponse}><Mic aria-hidden="true" /> Try again</button><button className="interactive-control quest-button quest-button--quiet" type="button" onClick={useHelp}><HelpCircle aria-hidden="true" /> Picture help</button></>
-    if (mode === 'support') return <><button className="interactive-control quest-button quest-button--primary" type="button" onClick={useHelp}><HelpCircle aria-hidden="true" /> Use picture help</button><button className="interactive-control quest-button quest-button--quiet" type="button" onClick={() => setMode('prompt')}>Try myself</button></>
-    return <><button className="interactive-control quest-button quest-button--primary" type="button" onClick={beginResponse}>{step.responseMode === 'airflow' ? <Wind aria-hidden="true" /> : <Mic aria-hidden="true" />} {step.responseMode === 'airflow' ? 'Start breath' : 'Start speaking'}</button><button className="interactive-control quest-button quest-button--quiet" type="button" onClick={useHelp}><HelpCircle aria-hidden="true" /> Picture help</button></>
-  }
+  const message = state.phase === 'intro'
+    ? 'வணக்கம்! நான் கவி. ஐந்து சொல் மந்திரங்களுடன் பாலத்தைக் கடக்கலாமா?'
+    : FEEDBACK[state.feedbackKey] || page.narration
 
   return (
-    <InteractiveSessionShell title="River Rescue" subtitle="Help Kavi reach the other side" state={session} dispatch={dispatch} steps={RIVER_RESCUE_ACTIVITY.steps}>
-      <div className="quest-wrap">
-        {mode === 'complete' ? (
-          <div className="quest-complete">
-            <span>🐘</span>
-            <ChildFeedback kind="success" title="River Rescue complete!" detail="Five communication turns helped Kavi cross safely." />
-            <button className="interactive-control quest-button quest-button--primary" type="button" onClick={() => navigate('/play')}>Choose another adventure</button>
+    <InteractiveSessionShell
+      title="கவியின் பாலப் பயணம்"
+      subtitle="ஐந்து படிகளில் தமிழ் பேசிப் பழகலாம்"
+      state={shellState}
+      steps={KAVI_STORY_PAGES.map((storyPage) => ({ id: storyPage.id, label: storyPage.target }))}
+      labels={TAMIL_SHELL_LABELS}
+    >
+      <div className="storybook-layout" data-testid="kavi-storybook">
+        <KaviStorybookScene
+          pageIndex={state.pageIndex}
+          mood={moodFor(state.phase, isSpeaking)}
+          message={message}
+          audioLevel={audioLevel}
+          motionLevel={preferences.motionLevel}
+          walkingProgress={walkingProgress}
+          picture={page.picture}
+          pictureAlt={page.pictureAlt}
+          effectProfile={effectProfile}
+        />
+
+        <section className="storybook-card" aria-live="polite">
+          <ol className="storybook-progress" data-testid="kavi-progress" aria-label="கதையின் ஐந்து படிகள்">
+            {KAVI_STORY_PAGES.map((storyPage, index) => (
+              <li key={storyPage.id} data-state={index < state.pageIndex ? 'done' : index === state.pageIndex ? 'current' : 'next'}>
+                <span>{index + 1}</span><small>{storyPage.target}</small>
+              </li>
+            ))}
+          </ol>
+
+          <div className="storybook-copy">
+            <span className="storybook-kicker"><BookOpen aria-hidden="true" /> பக்கம் {state.pageIndex + 1} / 5</span>
+            {state.phase === 'intro' ? (
+              <>
+                <h2>வணக்கம், குட்டி நண்பரே!</h2>
+                <p>{message}</p>
+              </>
+            ) : (
+              <>
+                <p>{message}</p>
+                <div className="storybook-target" aria-label={`சொல்ல வேண்டியது: ${page.target}`}>{page.target}</div>
+                {state.phase === 'support' ? <p className="storybook-help"><HelpCircle aria-hidden="true" /> {page.help}</p> : null}
+              </>
+            )}
           </div>
-        ) : (
-          <QuestScene stepId={step.id} chosenPath={chosenPath} bridgeProgress={bridgeProgress} message={message}>
-            <div className="quest-prompt"><strong>{copy.prompt}</strong><span>{copy.hint}</span></div>
-            <div className="quest-actions">
-              {step.responseMode === 'choice' ? step.choices.map((choice) => (
-                <button className="interactive-control quest-choice" type="button" key={choice} onClick={() => choose(choice)}>
-                  {choice === 'forest' ? <Trees aria-hidden="true" /> : choice === 'river' ? <Waves aria-hidden="true" /> : null}
-                  {choice === 'forest' ? 'Forest path' : choice === 'river' ? 'River path' : choice === 'nandri' ? 'Nandri' : 'Hooray'}
-                </button>
-              )) : responseControls()}
-            </div>
-            {mode === 'retry' ? <ChildFeedback kind="support" title="Good try" detail="Try once more or use the picture." /> : null}
-          </QuestScene>
-        )}
+
+          <div className="storybook-actions">
+            <TamilStatus label={animationPrompt} />
+            {state.phase === 'intro' ? <button className="storybook-button storybook-button--primary" type="button" onClick={beginStory}><Sparkles aria-hidden="true" /> கதையைத் தொடங்கலாம்</button> : null}
+            {state.phase === 'narrating' ? <button className="storybook-button" type="button" disabled><Volume2 aria-hidden="true" /> கவி கதை சொல்கிறான்...</button> : null}
+            {state.phase === 'ready' ? <>
+              <button className="storybook-button storybook-button--primary" type="button" onClick={beginListening}><Mic aria-hidden="true" /> சொல்லத் தொடங்கலாம்</button>
+              <button className="storybook-button" type="button" onClick={() => narrate(page)}><Volume2 aria-hidden="true" /> மீண்டும் கேட்கலாம்</button>
+            </> : null}
+            {state.phase === 'listening' ? <button className="storybook-button storybook-button--stop" type="button" onClick={finishListening}><Square aria-hidden="true" /> முடித்தேன்</button> : null}
+            {state.phase === 'evaluating' ? <button className="storybook-button" type="button" disabled><Ear aria-hidden="true" /> கவி கேட்டுப் பார்க்கிறான்...</button> : null}
+            {state.phase === 'support' ? <>
+              <button className="storybook-button storybook-button--primary" type="button" onClick={() => dispatch({ type: 'USE_HELP' })}><HelpCircle aria-hidden="true" /> கவியுடன் சேர்ந்து சொல்லலாம்</button>
+              <button className="storybook-button" type="button" onClick={beginListening}><Mic aria-hidden="true" /> மீண்டும் முயலலாம்</button>
+            </> : null}
+            {state.phase === 'success' ? <button className="storybook-button storybook-button--primary" type="button" onClick={() => dispatch({ type: 'NEXT' })}><Sparkles aria-hidden="true" /> கவியுடன் நடக்கலாம்</button> : null}
+            {state.phase === 'walking' ? <button className="storybook-button" type="button" disabled>கவி பாலத்தை நோக்கி நடக்கிறான்...</button> : null}
+            {state.phase === 'complete' ? <button className="storybook-button storybook-button--primary" type="button" onClick={resetStory}><RotateCcw aria-hidden="true" /> கதையை மீண்டும் விளையாடலாம்</button> : null}
+          </div>
+        </section>
       </div>
     </InteractiveSessionShell>
   )

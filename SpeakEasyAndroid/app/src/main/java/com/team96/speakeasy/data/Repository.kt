@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit
  * build with -PbackendUrl=http://<your-pc-lan-ip>:8000/ — no source edit needed.
  */
 object Api {
-    val BASE_URL: String = BuildConfig.BASE_URL
+    val BASE_URL: String = BackendUrl.validate(BuildConfig.BASE_URL, !BuildConfig.DEBUG)
 
     private val moshi: Moshi = Moshi.Builder()
         .add(KotlinJsonAdapterFactory())
@@ -32,9 +32,13 @@ object Api {
 
     private val client = OkHttpClient.Builder()
         .addInterceptor(authInterceptor)
-        .addInterceptor(HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
-        })
+        .apply {
+            if (BuildConfig.DEBUG) {
+                addInterceptor(HttpLoggingInterceptor().apply {
+                    level = HttpLoggingInterceptor.Level.BASIC
+                })
+            }
+        }
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
         .build()

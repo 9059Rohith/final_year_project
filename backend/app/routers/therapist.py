@@ -84,8 +84,13 @@ async def register_therapist(data: TherapistCreate, response: Response):
     await db.users.insert_one(doc)
     token = create_access_token(data={"sub": data.email, "role": "therapist"})
     response.set_cookie(
-        key="access_token", value=token, httponly=True,
-        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60, samesite="lax",
+        key=settings.ACCESS_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        samesite=settings.COOKIE_SAMESITE,
+        secure=settings.COOKIE_SECURE,
+        path="/",
     )
     return {
         "message": "Therapist account created",

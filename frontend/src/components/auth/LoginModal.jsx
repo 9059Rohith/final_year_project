@@ -9,7 +9,7 @@ import toast from 'react-hot-toast'
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  password: z.string().min(10, 'Password must be at least 10 characters'),
 })
 
 export default function LoginModal({ isOpen, onClose, onSwitchToRegister }) {
@@ -21,19 +21,9 @@ export default function LoginModal({ isOpen, onClose, onSwitchToRegister }) {
   
   const onSubmit = async (data) => {
     try {
-      console.log('🔐 Attempting login...')
       const response = await authAPI.login(data)
-      console.log('✅ Login response:', response.data)
-      console.log('🔑 Token received:', response.data.access_token ? 'Yes' : 'No')
-      console.log('👤 User data:', response.data.user)
       
       setAuth(response.data.user, response.data.access_token)
-      
-      // Verify storage
-      setTimeout(() => {
-        const stored = localStorage.getItem('auth-storage')
-        console.log('💾 Stored auth data:', stored)
-      }, 100)
       
       toast.success('Welcome back!')
       onClose()
@@ -41,7 +31,6 @@ export default function LoginModal({ isOpen, onClose, onSwitchToRegister }) {
       // Optional: navigate to dashboard
       // window.location.href = '/dashboard'
     } catch (error) {
-      console.error('❌ Login error:', error)
       toast.error(error.response?.data?.detail || 'Login failed')
     }
   }

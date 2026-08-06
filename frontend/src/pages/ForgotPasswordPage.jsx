@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Mail, ArrowLeft, Send, CheckCircle2, Brain, Shield, Star, Sparkles, RotateCcw } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
+import { authAPI } from '../services/api'
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -74,7 +75,7 @@ export default function ForgotPasswordPage() {
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
 
-  const sendCode = (e) => {
+  const sendCode = async (e) => {
     e?.preventDefault()
     if (!EMAIL_REGEX.test(email.trim())) {
       setError('Please enter a valid email address')
@@ -83,19 +84,27 @@ export default function ForgotPasswordPage() {
     }
     setError('')
     setLoading(true)
-    setTimeout(() => {
+    try {
+      await authAPI.forgotPassword(email.trim())
       setLoading(false)
       setSent(true)
-      toast.success('Reset code sent!')
-    }, 1400)
+      toast.success('If that account exists, a reset code has been sent.')
+    } catch (requestError) {
+      setLoading(false)
+      toast.error(requestError.response?.data?.detail || 'Could not request a reset code. Please try again.')
+    }
   }
 
-  const resend = () => {
+  const resend = async () => {
     setLoading(true)
-    setTimeout(() => {
+    try {
+      await authAPI.forgotPassword(email.trim())
       setLoading(false)
-      toast.success('Reset code resent!')
-    }, 1200)
+      toast.success('If that account exists, a new code has been sent.')
+    } catch (requestError) {
+      setLoading(false)
+      toast.error(requestError.response?.data?.detail || 'Could not resend the code. Please try again.')
+    }
   }
 
   return (
@@ -141,11 +150,12 @@ export default function ForgotPasswordPage() {
 
                   <form onSubmit={sendCode} className="space-y-5">
                     <div>
-                      <label className="block text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2">Email Address</label>
+                      <label htmlFor="password-reset-email" className="block text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2">Email Address</label>
                       <div className="relative">
                         <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400" />
                         <input
                           type="email"
+                          id="password-reset-email"
                           value={email}
                           onChange={(e) => { setEmail(e.target.value); if (error) setError('') }}
                           placeholder="your@email.com"
@@ -198,7 +208,7 @@ export default function ForgotPasswordPage() {
                   <p className="text-primary-600 dark:text-primary-400 font-semibold break-all mb-8">{email.trim()}</p>
 
                   <button
-                    onClick={() => navigate('/verify-otp')}
+                    onClick={() => navigate('/verify-otp', { state: { email: email.trim() } })}
                     className="btn-primary w-full !py-4 text-lg mb-4"
                   >
                     Enter Reset Code

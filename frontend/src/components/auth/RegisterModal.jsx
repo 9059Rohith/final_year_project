@@ -12,7 +12,12 @@ const registerSchema = z.object({
   child_name: z.string().min(2, 'Child name must be at least 2 characters'),
   child_age: z.coerce.number().min(4, 'Age must be at least 4').max(12, 'Age must be at most 12'),
   email: z.string().email('Invalid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  password: z.string()
+    .min(10, 'Password must be at least 10 characters')
+    .regex(/[A-Z]/, 'Password needs an uppercase letter')
+    .regex(/[a-z]/, 'Password needs a lowercase letter')
+    .regex(/[0-9]/, 'Password needs a number')
+    .regex(/[^A-Za-z0-9]/, 'Password needs a special character'),
   confirm_password: z.string().min(1, 'Confirm password is required'),
   language: z.string()
 }).refine((data) => data.password === data.confirm_password, {
@@ -32,24 +37,20 @@ export default function RegisterModal({ isOpen, onClose, onSwitchToLogin }) {
   
   const onSubmit = async (data) => {
     try {
-      console.log('📝 Attempting registration...')
       const response = await authAPI.register(data)
-      console.log('✅ Registration response:', response.data)
-      console.log('🔑 Token received:', response.data.access_token ? 'Yes' : 'No')
       
       setAuth(response.data.user, response.data.access_token)
-      
-      // Verify storage
-      setTimeout(() => {
-        const stored = localStorage.getItem('auth-storage')
-        console.log('💾 Stored auth data after registration:', stored)
-      }, 100)
       
       toast.success('Registration successful! Welcome!')
       onClose()
     } catch (error) {
-      console.error('❌ Registration error:', error)
-      toast.error(error.response?.data?.detail || 'Registration failed')
+      if (!error.response) {
+        toast.error('Cannot reach the server. Please check that the backend is running.')
+      } else if (error.response.status === 503) {
+        toast.error(error.response.data?.detail || 'Registration is temporarily unavailable. Please try again in a moment.')
+      } else {
+        toast.error(error.response.data?.detail || 'Registration failed')
+      }
     }
   }
   

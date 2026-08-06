@@ -27,7 +27,7 @@ This review covers the Play & Practice web routes, the interactive-session API, 
 
 ### Oversized or inconsistent input
 
-- Activity IDs are restricted to 1–80 lowercase slug characters.
+- Activity IDs are restricted to 1-80 lowercase slug characters.
 - Turns and successes are capped at 100, attempts at 300, duration at one hour, and effort at 10,000.
 - Completion cannot precede start; successful turns and assistance totals cannot exceed communication turns.
 - The summary query is limited to seven days and 500 rows, bounding database and aggregation work.

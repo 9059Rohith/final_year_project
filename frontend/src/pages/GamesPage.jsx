@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
 import {
   Gamepad2, Star, Play, Trophy, Target, Crown, Medal, Zap,
 } from 'lucide-react'
@@ -9,12 +10,12 @@ import { useAuthStore } from '../store/authStore'
 import toast from 'react-hot-toast'
 
 const GAMES = [
-  { name: 'Alphabet Match', emoji: '🔤', grad: 'from-primary-500 to-indigo-600',   difficulty: 1, best: 1240 },
-  { name: 'Picture Pop',    emoji: '🎈', grad: 'from-coral-500 to-rose-600',       difficulty: 2, best: 980 },
-  { name: 'Memory Flip',    emoji: '🧠', grad: 'from-secondary-500 to-cyan-600',   difficulty: 2, best: 1560 },
-  { name: 'Sound Safari',   emoji: '🦁', grad: 'from-gold-400 to-amber-500',       difficulty: 3, best: 720 },
-  { name: 'Pronounce Quest',emoji: '🗣️', grad: 'from-accent-500 to-emerald-600',   difficulty: 3, best: 2010 },
-  { name: 'Reward Rush',    emoji: '🏆', grad: 'from-violet-500 to-purple-600',    difficulty: 1, best: 1880 },
+  { name: 'Alphabet Match', emoji: '🔤', grad: 'from-primary-500 to-indigo-600',   difficulty: 1, best: 1240, path: '/games#alphabet-match' },
+  { name: 'Picture Pop',    emoji: '🎈', grad: 'from-coral-500 to-rose-600',       difficulty: 2, best: 980, path: '/play/arcade/breath-balloon' },
+  { name: 'Memory Flip',    emoji: '🧠', grad: 'from-secondary-500 to-cyan-600',   difficulty: 2, best: 1560, path: '/play/mouth-mirror' },
+  { name: 'Sound Safari',   emoji: '🦁', grad: 'from-gold-400 to-amber-500',       difficulty: 3, best: 720, path: '/letter-learning' },
+  { name: 'Pronounce Quest',emoji: '🗣️', grad: 'from-accent-500 to-emerald-600',   difficulty: 3, best: 2010, path: '/play/quest/river-rescue' },
+  { name: 'Reward Rush',    emoji: '🏆', grad: 'from-violet-500 to-purple-600',    difficulty: 1, best: 1880, path: '/rewards' },
 ]
 
 const LEADERBOARD = [
@@ -48,11 +49,25 @@ function buildRound() {
 }
 
 export default function GamesPage() {
+  const navigate = useNavigate()
+  const alphabetGameRef = useRef(null)
   const { user } = useAuthStore()
   const [round, setRound] = useState(buildRound)
   const [score, setScore] = useState(0)
   const [streak, setStreak] = useState(0)
   const [shakeId, setShakeId] = useState(null)
+
+  const openGame = (game) => {
+    if (game.path === '/games#alphabet-match') {
+      navigate(game.path)
+      requestAnimationFrame(() => {
+        alphabetGameRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        alphabetGameRef.current?.focus({ preventScroll: true })
+      })
+      return
+    }
+    navigate(game.path)
+  }
 
   const choose = (opt) => {
     if (opt.tamil === round.target.tamil) {
@@ -105,7 +120,8 @@ export default function GamesPage() {
                       <span className="inline-flex items-center gap-1"><Trophy className="w-3.5 h-3.5" /> Best {g.best.toLocaleString()}</span>
                     </div>
                     <button
-                      onClick={() => toast(`🎮 Loading ${g.name}…`, { icon: '🚀' })}
+                      onClick={() => openGame(g)}
+                      aria-label={`Play ${g.name}`}
                       className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/20 hover:bg-white/30 backdrop-blur font-semibold text-sm transition"
                     >
                       <Play className="w-4 h-4 fill-white" /> Play
@@ -118,7 +134,13 @@ export default function GamesPage() {
         </div>
 
         {/* PLAYABLE DEMO + LEADERBOARD */}
-        <div className="grid lg:grid-cols-3 gap-6">
+        <div
+          ref={alphabetGameRef}
+          id="alphabet-match"
+          data-testid="alphabet-match-game"
+          tabIndex={-1}
+          className="grid lg:grid-cols-3 gap-6 outline-none focus-visible:ring-4 focus-visible:ring-primary-300 rounded-3xl"
+        >
           {/* DEMO */}
           <Card className="lg:col-span-2 p-7">
             <div className="flex items-center justify-between mb-6">

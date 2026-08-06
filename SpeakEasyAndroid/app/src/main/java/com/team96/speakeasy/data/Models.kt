@@ -45,6 +45,20 @@ data class Lesson(
     val difficulty: Int,
     val airflow: String? = null,
     @Json(name = "candleBlows") val candleBlows: Boolean? = false,
+    @Json(name = "avatar_coach") val avatarCoach: AvatarCoach? = null,
+)
+
+data class AvatarCoach(
+    val enabled: Boolean = false,
+    val engine: String? = null,
+    val renderer: String? = null,
+    val name: String? = null,
+    val voice: String? = null,
+    @Json(name = "package_path") val packagePath: String? = null,
+    val intro: String? = null,
+    val tip: String? = null,
+    val success: String? = null,
+    val retry: String? = null,
 )
 
 data class SpeechResult(

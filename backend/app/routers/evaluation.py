@@ -1,29 +1,35 @@
-"""Evaluation router for speech and face analysis."""
-from fastapi import (
-    APIRouter, UploadFile, File, Form, WebSocket, WebSocketDisconnect,
-    Depends, HTTPException, status,
-)
-from datetime import datetime
-import json
-from ..services.speech_evaluator import speech_evaluator
+"""Speech and face evaluation endpoints."""
+from datetime import datetime, timezone
+
+from typing import Literal
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, WebSocket, WebSocketDisconnect, status
+from starlette.concurrency import run_in_threadpool
+
+from ..config import settings
 from ..services.face_analyzer import face_analyzer
-from ..database import get_database
+from ..services.speech_evaluator import speech_evaluator
+from ..services.tamil_story_evaluator import TamilStoryEvaluator
 from ..utils.jwt_handler import get_current_user
 from ..utils.rate_limit import RateLimiter
 
-
 router = APIRouter(prefix="/api/evaluate", tags=["evaluation"])
-
-# Speech evaluation runs ML models and is expensive — throttle per client.
 speech_rate_limit = RateLimiter(times=30, seconds=60)
-
-# Accept common browser/mobile recording formats only.
 ALLOWED_AUDIO_TYPES = {
-    "audio/webm", "audio/wav", "audio/x-wav", "audio/wave",
-    "audio/mpeg", "audio/mp4", "audio/m4a", "audio/x-m4a",
-    "audio/ogg", "audio/3gpp", "application/octet-stream",
+    "audio/webm", "audio/wav", "audio/x-wav", "audio/wave", "audio/mpeg",
+    "audio/mp4", "audio/m4a", "audio/x-m4a", "audio/ogg", "audio/3gpp",
+    "application/octet-stream",
 }
-MAX_AUDIO_BYTES = 10 * 1024 * 1024  # 10 MB
+tamil_story_evaluator = TamilStoryEvaluator()
+LESSON_PHONEMES = {1: "a", 2: "aa", 3: "la", 4: "ta", 5: "amma", 6: "appa"}
+
+
+def validate_lesson_target(lesson_id: int, target_phoneme: str) -> str:
+    """Return the canonical target only when it belongs to the requested lesson."""
+    target = str(target_phoneme).strip().lower()
+    if LESSON_PHONEMES.get(lesson_id) != target:
+        raise ValueError("Lesson and target phoneme do not match")
+    return target
 
 
 @router.post("/speech", dependencies=[Depends(speech_rate_limit)])
@@ -31,120 +37,89 @@ async def evaluate_speech(
     audio: UploadFile = File(...),
     target_phoneme: str = Form(..., min_length=1, max_length=64),
     lesson_id: int = Form(..., ge=1),
-    current_user: dict = Depends(get_current_user)
+    browser_transcript: str = Form("", max_length=64),
+    current_user: dict = Depends(get_current_user),
 ):
-    """
-    Evaluate speech pronunciation.
-    
-    Args:
-        audio: Audio file (webm, wav, etc.)
-        target_phoneme: Target phoneme to evaluate against
-        lesson_id: ID of the lesson
-        current_user: Authenticated user
-        
-    Returns:
-        Evaluation results with accuracy, feedback, transcription, etc.
-    """
-    print("\n" + "="*60)
-    print(f"🎯 NEW EVALUATION REQUEST")
-    print(f"   User: {current_user.get('email', 'Unknown')}")
-    print(f"   Target: {target_phoneme}")
-    print(f"   Lesson: {lesson_id}")
-    print("="*60)
-    
-    # Validate content type (reject obviously wrong uploads before reading).
-    if audio.content_type and audio.content_type not in ALLOWED_AUDIO_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail=f"Unsupported audio type: {audio.content_type}",
-        )
-
+    """Evaluate a bounded audio recording without logging child/audio PII."""
     try:
-        # Read audio bytes
-        audio_bytes = await audio.read()
-        print(f"📦 Audio received: {len(audio_bytes)} bytes")
-
-        # Validate size: reject empty and oversized uploads.
+        target_phoneme = validate_lesson_target(lesson_id, target_phoneme)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if audio.content_type and audio.content_type not in ALLOWED_AUDIO_TYPES:
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Unsupported audio type")
+    try:
+        audio_bytes = await audio.read(settings.MAX_UPLOAD_BYTES + 1)
         if not audio_bytes:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Empty audio file.",
-            )
-        if len(audio_bytes) > MAX_AUDIO_BYTES:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail="Audio file too large (max 10 MB).",
-            )
-
-        # Evaluate pronunciation
-        result = speech_evaluator.evaluate_pronunciation(
+            raise HTTPException(status_code=400, detail="Empty audio file")
+        if len(audio_bytes) > settings.MAX_UPLOAD_BYTES:
+            raise HTTPException(status_code=413, detail="Audio file too large")
+        result = await run_in_threadpool(
+            speech_evaluator.evaluate_pronunciation,
             audio_bytes,
-            target_phoneme
+            target_phoneme,
+            browser_transcript,
         )
-        
-        # Add user and lesson context
-        result["user_id"] = str(current_user["_id"])
-        result["lesson_id"] = lesson_id
-        result["evaluated_at"] = datetime.utcnow().isoformat()
-        result["target_phoneme"] = target_phoneme
-        
-        print("\n" + "="*60)
-        print(f"✅ EVALUATION COMPLETE")
-        print(f"   Transcription: '{result.get('transcription', 'N/A')}'")
-        print(f"   Phoneme Match: {result.get('phoneme_match', False)}")
-        print(f"   Accuracy: {result.get('accuracy', 0)}%")
-        print(f"   MFCC Score: {result.get('mfcc_score', 0)}")
-        print("="*60 + "\n")
-        
+        result.update({
+            "user_id": str(current_user["_id"]),
+            "lesson_id": lesson_id,
+            "evaluated_at": datetime.now(timezone.utc).isoformat(),
+            "target_phoneme": target_phoneme,
+        })
         return result
-
     except HTTPException:
-        # Validation errors (size/type) should surface as real HTTP errors.
         raise
-    except Exception as e:
-        print(f"\n❌ ERROR in evaluate_speech: {e}")
-        import traceback
-        traceback.print_exc()
-        
+    except Exception:
         return {
-            "error": str(e),
+            "error": "evaluation_failed",
             "accuracy": 0,
             "phoneme_match": False,
             "mfcc_score": 0,
             "transcription": "",
-            "feedback": f"Could not process audio: {str(e)}"
+            "feedback": "Could not process audio. Please try again with a clear recording.",
+            "validation_status": "processing_error",
         }
+
+
+@router.post("/tamil-story", dependencies=[Depends(speech_rate_limit)])
+async def evaluate_tamil_story(
+    audio: UploadFile = File(...),
+    target_id: Literal["a", "ii", "amma", "kavi_vaa", "kavi_bridge"] = Form(...),
+    _current_user: dict = Depends(get_current_user),
+):
+    """Evaluate one of the five fixed Tamil story targets without persistence."""
+    if audio.content_type and audio.content_type not in ALLOWED_AUDIO_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Unsupported audio type",
+        )
+    audio_bytes = await audio.read(settings.MAX_UPLOAD_BYTES + 1)
+    if not audio_bytes:
+        raise HTTPException(status_code=400, detail="Empty audio file")
+    if len(audio_bytes) > settings.MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Audio file too large")
+    result = await run_in_threadpool(
+        tamil_story_evaluator.evaluate, audio_bytes, target_id
+    )
+    return {**result, "target_id": target_id}
 
 
 @router.websocket("/ws/face/{session_id}")
 async def face_analysis_websocket(websocket: WebSocket, session_id: str):
-    """
-    WebSocket endpoint for real-time face analysis.
-    
-    Receives video frames and sends back face analysis results.
-    """
+    """Analyze a live frame stream for the browser practice session."""
     await websocket.accept()
-    
     try:
         while True:
-            # Receive frame data from client
             data = await websocket.receive_bytes()
-            
-            # Analyze frame
             result = face_analyzer.analyze_frame(data)
-            
-            # Send results back to client
             await websocket.send_json({
                 "face_detected": result.face_detected,
                 "mouth_open_ratio": result.mouth_open_ratio,
                 "mouth_is_open": result.mouth_is_open,
                 "stress_level": result.stress_level,
                 "emotion": result.emotion,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             })
-            
     except WebSocketDisconnect:
-        print(f"WebSocket disconnected: {session_id}")
-    except Exception as e:
-        print(f"WebSocket error: {e}")
+        return
+    except Exception:
         await websocket.close()

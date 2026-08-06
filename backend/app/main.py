@@ -1,12 +1,17 @@
 """Main FastAPI application."""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
+import asyncio
 import os
 import bcrypt
 from .config import settings
-from .database import connect_to_mongo, close_mongo_connection, get_database
+from .database import connect_to_mongo, close_mongo_connection, ensure_database, get_database
+from .database import db_manager
+from .middleware import SecurityHeadersMiddleware
+from .services.speech_evaluator import speech_evaluator
 from .routers import (
     auth, therapy, evaluation, progress, admin, contact,
     gamification, analysis, therapist, parent,
@@ -22,7 +27,7 @@ from .routers import (
     uploads, reminders, activity, moderation, privacy, polls,
     # Phase 8 modules
     reviews, bookmarks, glossary, templates, integrations,
-    surveys, dashboard,
+    surveys, dashboard, interactive_sessions, story_voice,
 )
 
 
@@ -32,6 +37,11 @@ async def lifespan(app: FastAPI):
     # Startup
     await connect_to_mongo()
     await seed_admin_user()  # skips safely if DB not connected
+    # Keep startup responsive while preparing the recognizer before the child
+    # reaches the camera/evaluation slide.
+    app.state.speech_model_warmup = asyncio.create_task(
+        asyncio.to_thread(speech_evaluator.warm_up)
+    )
     yield
     # Shutdown
     await close_mongo_connection()
@@ -44,10 +54,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts or ["*"])
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.CORS_ORIGIN, "http://localhost:3000"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -117,6 +130,8 @@ app.include_router(templates.router)
 app.include_router(integrations.router)
 app.include_router(surveys.router)
 app.include_router(dashboard.router)
+app.include_router(interactive_sessions.router)
+app.include_router(story_voice.router)
 
 
 # Serve uploaded files (avatars, attachments) from the local uploads dir.
@@ -137,16 +152,33 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy"}
+    """Backward-compatible alias for the liveness probe."""
+    return {"status": "ok", "service": "speakeasy-api"}
+
+
+@app.get("/health/live")
+async def health_live():
+    """Cheap process liveness probe used by Render."""
+    return {"status": "ok", "service": "speakeasy-api"}
+
+
+@app.get("/health/ready")
+async def health_ready():
+    """Verify MongoDB and recover a stale connection before reporting readiness."""
+    from fastapi import HTTPException
+
+    try:
+        await ensure_database()
+    except Exception:
+        raise HTTPException(status_code=503, detail="database_unavailable") from None
+    return {"status": "ready", "database": "ok"}
 
 
 async def seed_admin_user():
     """Seed admin users if not present.
 
-    Seeds the env-configured admin plus the project super-admin account. The
-    super-admin (rajuchaswik@gmail.com) is flagged ``is_super_admin`` and has
-    access to every admin endpoint including role changes and deletes.
+    Seed only the administrator configured through environment variables.
+    Credentials are never embedded in source code.
     """
     from datetime import datetime
     from .database import db_manager
@@ -174,11 +206,7 @@ async def seed_admin_user():
             "total_stars": 0,
         }
 
-    # Admins to ensure exist: (email, password, name, is_super_admin)
-    seeds = [
-        (settings.ADMIN_EMAIL, settings.ADMIN_PASSWORD, "Admin User", False),
-        ("rajuchaswik@gmail.com", "Raju@2006", "Raju (Super Admin)", True),
-    ]
+    seeds = [(settings.ADMIN_EMAIL, settings.ADMIN_PASSWORD, "Admin User", True)]
 
     for email, password, name, is_super in seeds:
         try:

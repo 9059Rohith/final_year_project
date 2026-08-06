@@ -1,14 +1,11 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import Confetti from 'react-confetti'
-import { Howl } from 'howler'
 import { useNavigate } from 'react-router-dom'
 import { useTherapyStore } from '../../store/therapyStore'
 import { progressAPI } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
-import { useSettingsStore } from '../../store/settingsStore'
 import toast from 'react-hot-toast'
-import MitraCompanion from '../three/MitraCompanion'
 
 const motivationalMessages = [
   "🌟 Outstanding! You're a superstar!",
@@ -25,7 +22,6 @@ export default function Slide5_Rewards({ lesson }) {
   const navigate = useNavigate()
   const { sessionResults, resetSession } = useTherapyStore()
   const { user, updateUserStats } = useAuthStore()
-  const { soundEnabled } = useSettingsStore()
   const [saved, setSaved] = useState(false)
   
   // Get latest result
@@ -43,20 +39,6 @@ export default function Slide5_Rewards({ lesson }) {
   const message = stars >= 2 ? motivationalMessages[Math.floor(Math.random() * motivationalMessages.length)] : "Keep practicing! You're learning! 💪"
   
   useEffect(() => {
-    // Play sounds (respecting the user's sound preference)
-    if (soundEnabled && stars >= 2) {
-      new Howl({ src: ['/assets/sounds/applause.mp3'] }).play()
-    }
-
-    // Play star collect sound for each star
-    if (soundEnabled && stars) {
-      [...Array(stars)].forEach((_, i) => {
-        setTimeout(() => {
-          new Howl({ src: ['/assets/sounds/star_collect.mp3'] }).play()
-        }, 500 + i * 300)
-      })
-    }
-    
     // Save progress
     if (!saved && latestResult.accuracy > 0) {
       saveProgress()
@@ -151,16 +133,7 @@ export default function Slide5_Rewards({ lesson }) {
                 }}
                 className="star-sparkle"
               >
-                <img
-                  src={`/assets/stars/star${i + 1}.png`}
-                  alt={`Star ${i + 1}`}
-                  className="w-24 h-24"
-                  onError={(e) => {
-                    e.target.style.display = 'none'
-                    e.target.nextElementSibling.style.display = 'block'
-                  }}
-                />
-                <div className="hidden text-6xl">
+                <div className="text-6xl" role="img" aria-label={i < stars ? `Earned star ${i + 1}` : `Empty star ${i + 1}`}>
                   {i < stars ? '⭐' : '☆'}
                 </div>
               </motion.div>
@@ -260,20 +233,6 @@ export default function Slide5_Rewards({ lesson }) {
           </motion.div>
         </motion.div>
       </div>
-
-      {/* MITRA Companion — celebrates with the child! */}
-      <motion.div
-        initial={{ opacity: 0, scale: 0, x: 80 }}
-        animate={{ opacity: 1, scale: 1, x: 0 }}
-        transition={{ delay: 1.0, type: 'spring', stiffness: 180, damping: 18 }}
-        className="fixed bottom-6 right-6 z-40 pointer-events-none"
-      >
-        <MitraCompanion
-          slide={5}
-          score={Math.round(latestResult.accuracy)}
-          compact
-        />
-      </motion.div>
     </div>
   )
 }

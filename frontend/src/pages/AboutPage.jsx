@@ -167,6 +167,24 @@ export default function AboutPage() {
         </div>
       </Card>
 
+      <div id="privacy" className="scroll-mt-24 mb-8">
+        <SectionTitle title="Privacy Policy" subtitle="How SpeakEasy protects families" icon={Target} />
+        <Card className="p-6">
+          <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-300">
+            Live camera and microphone activities are processed for the active exercise and are released when the activity ends. Raw child audio and video are not stored by Play & Practice. Account and aggregate progress requests use the secured application API.
+          </p>
+        </Card>
+      </div>
+
+      <div id="terms" className="scroll-mt-24 mb-8">
+        <SectionTitle title="Terms of Service" subtitle="Safe and supported use" icon={BookOpen} />
+        <Card className="p-6">
+          <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-300">
+            SpeakEasy is a guided practice aid and does not replace diagnosis or care from a qualified speech-language professional. A parent, caregiver, or therapist should supervise child use and stop any exercise that causes discomfort.
+          </p>
+        </Card>
+      </div>
+
       {/* CTA */}
       <Card className="overflow-hidden bg-gradient-to-r from-accent-500 to-emerald-600 text-white border-0">
         <div className="p-8 flex flex-col sm:flex-row items-center justify-between gap-4 relative">

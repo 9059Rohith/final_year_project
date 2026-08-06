@@ -1,7 +1,7 @@
 /**
  * MitraRobot.jsx
  * ──────────────────────────────────────────────────────────────────
- * The MITRA 3D robot companion powered by the genkub_greeting_robot.gltf.
+ * The MITRA 3D robot companion powered by /mitra_robot.gltf.
  * 
  * Props (all optional):
  *   mood        'idle' | 'happy' | 'celebrate' | 'encourage' | 'listen' | 'thinking'

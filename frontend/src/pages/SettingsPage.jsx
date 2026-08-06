@@ -147,6 +147,12 @@ export default function SettingsPage() {
     toggleDarkMode, setSoundEnabled, setNotificationsEnabled, setAutoPlay,
   } = useSettingsStore()
   const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const supportItems = [
+    { title: 'How to Use SpeakEasy', desc: 'Step-by-step guide to get the most out of speech therapy sessions', icon: '📖', action: () => navigate('/help') },
+    { title: 'Contact Support', desc: 'Get help from our team at speakeasy@amrita.edu', icon: '✉️', action: () => { window.location.href = 'mailto:speakeasy@amrita.edu' } },
+    { title: 'About SpeakEasy ASD', desc: 'Version 1.0.0 — Team 96, Amrita Vishwa Vidyapeetham', icon: 'ℹ️', action: () => navigate('/about') },
+    { title: 'Research & Privacy', desc: 'Learn about our privacy-first approach and research methodology', icon: '🔬', action: () => navigate('/about#privacy') },
+  ]
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 transition-colors">
@@ -250,14 +256,9 @@ export default function SettingsPage() {
         {/* Help */}
         <SettingSection title="Help & Support" icon={HelpCircle} delay={0.4}>
           <div className="space-y-3">
-            {[
-              { title: 'How to Use SpeakEasy', desc: 'Step-by-step guide to get the most out of speech therapy sessions', icon: '📖' },
-              { title: 'Contact Support', desc: 'Get help from our team at speakeasy@amrita.edu', icon: '✉️' },
-              { title: 'About SpeakEasy ASD', desc: 'Version 1.0.0 — Team 96, Amrita Vishwa Vidyapeetham', icon: 'ℹ️' },
-              { title: 'Research & Privacy', desc: 'Learn about our privacy-first approach and research methodology', icon: '🔬' },
-            ].map((item, i) => (
+            {supportItems.map((item, i) => (
               <button key={i}
-                onClick={() => toast(item.desc, { icon: item.icon })}
+                onClick={item.action}
                 className="w-full text-left px-5 py-4 bg-neutral-50 dark:bg-neutral-800 hover:bg-primary-50 dark:hover:bg-neutral-700 rounded-2xl transition-all flex items-center gap-4 border border-neutral-100 dark:border-neutral-700 hover:border-primary-200 group"
               >
                 <span className="text-2xl">{item.icon}</span>

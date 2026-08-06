@@ -8,6 +8,7 @@ export const DEFAULT_INTERACTION_PREFERENCES = Object.freeze({
   contrastMode: 'standard',
   sessionPace: 'guided',
   cameraEnabled: false,
+  pippinVoice: 'kitten',
   calmMode: false,
 })
 
@@ -17,6 +18,7 @@ const ENUM_VALUES = {
   celebrationLevel: new Set(['full', 'gentle', 'none']),
   contrastMode: new Set(['standard', 'high']),
   sessionPace: new Set(['guided', 'self']),
+  pippinVoice: new Set(['kitten', 'gentle']),
 }
 
 const BOOLEAN_KEYS = new Set(['soundEnabled', 'spokenPrompts', 'cameraEnabled', 'calmMode'])
@@ -72,4 +74,3 @@ export function applyCalmMode(preferences, enabled) {
   const restored = migrateInteractionPreferences({ ...current, ...restore, calmMode: false })
   return restored
 }
-

@@ -20,14 +20,15 @@ const loginSchema = z.object({
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [isChecking, setIsChecking] = useState(true)
-  const { isAuthenticated, user, token } = useAuthStore()
+  const [isDemoSubmitting, setIsDemoSubmitting] = useState(false)
+  const { isAuthenticated, user, authReady } = useAuthStore()
   const setAuth = useAuthStore((state) => state.setAuth)
   const navigate = useNavigate()
   
   useEffect(() => {
-    // Short delay to let zustand hydrate from localStorage
+    // The HttpOnly session cookie is restored by App before this route renders.
     const timer = setTimeout(() => {
-      if (isAuthenticated && user && token) {
+      if (authReady && isAuthenticated && user) {
         if (user.role === 'admin') navigate('/admin', { replace: true })
         else navigate('/dashboard', { replace: true })
       } else {
@@ -35,7 +36,7 @@ export default function LoginPage() {
       }
     }, 50)
     return () => clearTimeout(timer)
-  }, [isAuthenticated, user, token, navigate])
+  }, [authReady, isAuthenticated, user, navigate])
   
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm({
     resolver: zodResolver(loginSchema)
@@ -46,7 +47,7 @@ export default function LoginPage() {
     return <div className="min-h-screen bg-white" />
   }
   
-  const onSubmit = async (data) => {
+  const loginWithCredentials = async (data) => {
     try {
       const response = await authAPI.login(data)
       setAuth(response.data.user, response.data.access_token)
@@ -57,6 +58,17 @@ export default function LoginPage() {
       }, 100)
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Login failed. Please check your credentials.')
+    }
+  }
+
+  const onSubmit = (data) => loginWithCredentials(data)
+
+  const enterDemo = async () => {
+    setIsDemoSubmitting(true)
+    try {
+      await loginWithCredentials({ email: 'demo@speakeasy.app', password: 'Demo@1234' })
+    } finally {
+      setIsDemoSubmitting(false)
     }
   }
   
@@ -184,7 +196,7 @@ export default function LoginPage() {
                 <input type="checkbox" className="w-4 h-4 text-primary-600 border-neutral-300 rounded focus:ring-primary-500" />
                 <span className="ml-2 text-sm text-neutral-600">Remember me</span>
               </label>
-              <a href="#" className="text-sm text-primary-600 hover:text-primary-700 font-medium">Forgot password?</a>
+              <Link to="/forgot-password" className="text-sm text-primary-600 hover:text-primary-700 font-medium">Forgot password?</Link>
             </div>
             
             <button type="submit" disabled={isSubmitting}
@@ -197,6 +209,26 @@ export default function LoginPage() {
                 </span>
               ) : 'Sign In'}
             </button>
+
+            <div className="rounded-2xl border-2 border-primary-100 bg-primary-50/70 p-4">
+              <div className="mb-3 flex items-start gap-3">
+                <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white text-primary-600 shadow-sm">
+                  <Sparkles className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div>
+                  <p className="font-bold text-neutral-800">Try the complete demo</p>
+                  <p className="text-sm text-neutral-500">demo@speakeasy.app · Demo@1234</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={enterDemo}
+                disabled={isDemoSubmitting || isSubmitting}
+                className="w-full rounded-xl border border-primary-200 bg-white px-4 py-3 font-bold text-primary-700 shadow-sm transition hover:border-primary-400 hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isDemoSubmitting ? 'Opening Demo...' : 'Enter Demo'}
+              </button>
+            </div>
           </form>
           
           <div className="mt-8 text-center">

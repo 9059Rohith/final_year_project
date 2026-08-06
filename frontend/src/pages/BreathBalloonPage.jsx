@@ -4,16 +4,22 @@ import { useNavigate } from 'react-router-dom'
 import BalloonScene from '../components/interactive/BalloonScene'
 import ChildFeedback from '../components/interactive/ChildFeedback'
 import InteractiveSessionShell from '../components/interactive/InteractiveSessionShell'
+import { TamilStatus } from '../components/interactive/SceneEffects'
 import { BREATH_BALLOON_ACTIVITY, createBreathBalloonReport } from '../features/arcade/breathBalloonActivity'
+import { LETTER_FLIGHT_ROUNDS, findNewlyCrossedLetters, speakCuteLetterSound } from '../features/arcade/letterFlight'
+import { getBreathVisualState, getEffectProfile, getTamilPrompt } from '../features/interactive/animationPresentation'
 import { createNoiseCalibrator, normalizeAudioLevel, readAnalyserLevel, scoreTargetControl } from '../features/interactive/audioLevel'
+import { createSceneAudioController } from '../features/interactive/sceneAudio'
 import { createSession, sessionReducer } from '../features/interactive/sessionEngine'
 import { useAudioRecorder } from '../hooks/useAudioRecorder'
 import { gamesAPI, interactiveSessionsAPI } from '../services/api'
+import { useInteractionSettingsStore } from '../store/interactionSettingsStore'
 
 const PASS_SCORE = 40
 
 export default function BreathBalloonPage() {
   const navigate = useNavigate()
+  const { preferences } = useInteractionSettingsStore()
   const [session, dispatch] = useReducer(sessionReducer, BREATH_BALLOON_ACTIVITY, createSession)
   const [mode, setMode] = useState('intro')
   const [level, setLevel] = useState(0)
@@ -22,6 +28,8 @@ export default function BreathBalloonPage() {
   const [pendingScore, setPendingScore] = useState(null)
   const [demoMode, setDemoMode] = useState(false)
   const [permissionError, setPermissionError] = useState(false)
+  const [crossedLetterIds, setCrossedLetterIds] = useState([])
+  const [lastCrossedLetter, setLastCrossedLetter] = useState(null)
   const calibratorRef = useRef(createNoiseCalibrator())
   const phaseStartedRef = useRef(0)
   const samplesRef = useRef([])
@@ -29,12 +37,60 @@ export default function BreathBalloonPage() {
   const assistanceRef = useRef({ independent: 0, verbal_prompt: 0, visual_prompt: 0, modelled: 0, skipped: 0 })
   const startedAtRef = useRef(Date.now())
   const completingRef = useRef(false)
+  const previousFlightLevelRef = useRef(0)
+  const crossedLetterIdsRef = useRef(new Set())
+  const audioActivatedRef = useRef(false)
+  const sceneAudioRef = useRef(null)
   const { isRecording, analyserRef, startRecording, stopRecording, resetRecording } = useAudioRecorder()
   const step = BREATH_BALLOON_ACTIVITY.steps[session.stepIndex] || BREATH_BALLOON_ACTIVITY.steps.at(-1)
+  const letterObstacles = LETTER_FLIGHT_ROUNDS[session.stepIndex] || LETTER_FLIGHT_ROUNDS.at(-1)
+  const visualState = getBreathVisualState({ mode, level, target: step.target })
+  const effectProfile = getEffectProfile(preferences)
+  const tamilPrompt = getTamilPrompt('breath-balloon', visualState)
+
+  if (!sceneAudioRef.current && typeof window !== 'undefined') sceneAudioRef.current = createSceneAudioController(window)
 
   useEffect(() => () => resetRecording(), [resetRecording])
 
+  useEffect(() => () => sceneAudioRef.current?.stop(), [])
+
+  useEffect(() => {
+    if (!preferences.soundEnabled) sceneAudioRef.current?.stop()
+  }, [preferences.soundEnabled])
+
+  useEffect(() => {
+    if (!audioActivatedRef.current || !tamilPrompt || !['too-weak', 'too-strong', 'success', 'complete'].includes(visualState)) return
+    sceneAudioRef.current?.speakTamil(tamilPrompt, {
+      enabled: preferences.soundEnabled && preferences.spokenPrompts,
+      activated: true,
+    })
+    if (visualState === 'success') sceneAudioRef.current?.playEffect('success', { enabled: preferences.soundEnabled, activated: true })
+    if (visualState === 'complete') sceneAudioRef.current?.playEffect('sparkle', { enabled: preferences.soundEnabled, activated: true })
+  }, [preferences.soundEnabled, preferences.spokenPrompts, tamilPrompt, visualState])
+
+  useEffect(() => {
+    if (mode !== 'playing') return
+    const newlyCrossed = findNewlyCrossedLetters({
+      previousLevel: previousFlightLevelRef.current,
+      currentLevel: level,
+      obstacles: letterObstacles,
+      crossedIds: crossedLetterIdsRef.current,
+    })
+    for (const obstacle of newlyCrossed) {
+      crossedLetterIdsRef.current.add(obstacle.id)
+      setLastCrossedLetter(obstacle)
+      if (preferences.soundEnabled) speakCuteLetterSound(window, obstacle)
+    }
+    if (newlyCrossed.length) setCrossedLetterIds([...crossedLetterIdsRef.current])
+    previousFlightLevelRef.current = level
+  }, [letterObstacles, level, mode, preferences.soundEnabled])
+
   const beginCalibration = async () => {
+    audioActivatedRef.current = true
+    sceneAudioRef.current?.speakTamil(getTamilPrompt('breath-balloon', 'intro'), {
+      enabled: preferences.soundEnabled && preferences.spokenPrompts,
+      activated: true,
+    })
     setPermissionError(false)
     setMode('calibrating')
     calibratorRef.current.reset()
@@ -103,6 +159,10 @@ export default function BreathBalloonPage() {
     completingRef.current = false
     samplesRef.current = []
     setPendingScore(null)
+    crossedLetterIdsRef.current = new Set()
+    previousFlightLevelRef.current = 0
+    setCrossedLetterIds([])
+    setLastCrossedLetter(null)
     setLevel(demoMode ? 0.35 : 0)
     attemptsRef.current += 1
     dispatch({ type: 'BEGIN_ATTEMPT', at: Date.now() })
@@ -157,6 +217,7 @@ export default function BreathBalloonPage() {
   }
 
   const useScreenControl = () => {
+    audioActivatedRef.current = true
     resetRecording()
     setDemoMode(true)
     setPermissionError(false)
@@ -177,16 +238,30 @@ export default function BreathBalloonPage() {
     setPendingScore(null)
     setDemoMode(false)
     setLevel(0)
+    crossedLetterIdsRef.current = new Set()
+    previousFlightLevelRef.current = 0
+    setCrossedLetterIds([])
+    setLastCrossedLetter(null)
+    window.speechSynthesis?.cancel()
+    sceneAudioRef.current?.stop()
+    audioActivatedRef.current = false
     setMode('intro')
   }
 
+  const exitActivity = () => {
+    resetRecording()
+    window.speechSynthesis?.cancel()
+    sceneAudioRef.current?.stop()
+    navigate('/play')
+  }
+
   return (
-    <InteractiveSessionShell title="Breath Balloon" subtitle="Keep the balloon inside the glowing zone" state={session} dispatch={dispatch} steps={BREATH_BALLOON_ACTIVITY.steps}>
+    <InteractiveSessionShell title="Breath Balloon" subtitle="Keep the balloon inside the glowing zone" state={session} dispatch={dispatch} steps={BREATH_BALLOON_ACTIVITY.steps} onExit={exitActivity}>
       <div className="breath-game">
         {mode === 'intro' ? (
           <div className="breath-card breath-card--intro">
             <span className="breath-card__hero"><Wind aria-hidden="true" /></span>
-            <ChildFeedback title="Ready for a balloon adventure?" detail="First, stay quiet for two seconds so the game can learn the room sound." />
+            <ChildFeedback title={getTamilPrompt('breath-balloon', 'intro')} detail="Ready for a balloon adventure? First, stay quiet for two seconds so the game can learn the room sound." />
             <div className="breath-card__privacy"><ShieldCheck aria-hidden="true" /> Sound is used live and is not saved.</div>
             <button className="interactive-control interactive-primary-button breath-button" type="button" onClick={beginCalibration}><Mic aria-hidden="true" /> Check my microphone</button>
           </div>
@@ -213,7 +288,19 @@ export default function BreathBalloonPage() {
 
         {['ready', 'playing', 'success', 'support'].includes(mode) ? (
           <div className="breath-play-area">
-            <BalloonScene level={level} target={step.target} active={mode === 'playing'} score={['success', 'support'].includes(mode) ? pendingScore : undefined} />
+            <BalloonScene
+              level={level}
+              target={step.target}
+              active={mode === 'playing'}
+              score={['success', 'support'].includes(mode) ? pendingScore : undefined}
+              obstacles={letterObstacles}
+              crossedIds={crossedLetterIds}
+              lastCrossed={lastCrossedLetter}
+              visualState={visualState}
+              motionLevel={preferences.motionLevel}
+              effectProfile={effectProfile}
+            />
+            <TamilStatus label={tamilPrompt} />
             {demoMode && mode === 'playing' ? (
               <label className="breath-slider"><span>Move your balloon</span><input aria-label="Balloon voice level" type="range" min="0" max="100" value={Math.round(level * 100)} onChange={(event) => setLevel(Number(event.target.value) / 100)} /></label>
             ) : null}
@@ -228,8 +315,15 @@ export default function BreathBalloonPage() {
 
         {mode === 'complete' ? (
           <div className="breath-card breath-card--complete">
-            <span className="breath-card__hero">3</span>
-            <ChildFeedback kind="success" title="Three balloons are flying!" detail={`You finished every round. Best steady control: ${Math.max(...scores, 0)}%.`} />
+            <BalloonScene
+              level={1}
+              target={step.target}
+              visualState="complete"
+              motionLevel={preferences.motionLevel}
+              effectProfile={effectProfile}
+              showMeter={false}
+            />
+            <ChildFeedback kind="success" title={getTamilPrompt('breath-balloon', 'complete')} detail={`Three balloons are flying! Best steady control: ${Math.max(...scores, 0)}%.`} />
             <div className="breath-actions"><button className="interactive-control interactive-primary-button breath-button" type="button" onClick={() => navigate('/play')}>Choose another adventure</button><button className="interactive-control breath-button breath-button--quiet" type="button" onClick={restart}><RotateCcw aria-hidden="true" /> Play again</button></div>
           </div>
         ) : null}

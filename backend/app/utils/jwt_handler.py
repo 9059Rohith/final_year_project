@@ -1,12 +1,14 @@
-"""JWT token handling utilities."""
-from datetime import datetime, timedelta
+"""JWT token handling utilities for browser cookies and Android bearer auth."""
+from datetime import datetime, timedelta, timezone
 from typing import Optional
-from jose import JWTError, jwt
-from fastapi import HTTPException, status, Depends
+import jwt
+from jwt import InvalidTokenError
+from fastapi import HTTPException, Request, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from ..config import settings
 from ..models.user import TokenData
 from ..database import get_database
+from ..demo_user import DEMO_USER, is_demo_email
 
 
 security = HTTPBearer(auto_error=False)
@@ -16,9 +18,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     """Create JWT access token."""
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
@@ -37,23 +39,32 @@ def decode_token(token: str) -> TokenData:
                 detail="Could not validate credentials"
             )
         return TokenData(email=email, role=role)
-    except JWTError:
+    except InvalidTokenError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials"
         )
 
 
-async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)):
+async def get_current_user(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+):
     """Get current authenticated user."""
-    if not credentials:
+    token = credentials.credentials if credentials else request.cookies.get(settings.ACCESS_COOKIE_NAME)
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated"
         )
     
-    token_data = decode_token(credentials.credentials)
+    token_data = decode_token(token)
+    if token_data.email and is_demo_email(token_data.email):
+        return DEMO_USER.copy()
+
     db = get_database()
+    if db is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Database unavailable")
     user = await db.users.find_one({"email": token_data.email})
     
     if user is None:

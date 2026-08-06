@@ -1,15 +1,20 @@
 import { useState, useRef, useCallback } from 'react'
 import toast from 'react-hot-toast'
+import { repeatPhrase } from '../utils/speechRepeat'
 
 export const useAudioRecorder = () => {
   const [isRecording, setIsRecording] = useState(false)
   const [audioBlob, setAudioBlob] = useState(null)
   const [duration, setDuration] = useState(0)
+  const [isRepeating, setIsRepeating] = useState(false)
   
   const mediaRecorderRef = useRef(null)
+  const streamRef = useRef(null)
   const chunksRef = useRef([])
   const startTimeRef = useRef(null)
   const recognitionRef = useRef(null)
+  const lastRepeatedRef = useRef('')
+  const repeatTimeoutRef = useRef(null)
   const [transcript, setTranscript] = useState('')
 
   // Web Audio nodes for real-time visualization. Exposed via analyserRef so
@@ -25,9 +30,11 @@ export const useAudioRecorder = () => {
     analyserRef.current = null
   }, [])
 
-  const startRecording = useCallback(async (language = 'en-IN') => {
+  const startRecording = useCallback(async (language = 'en-IN', options = {}) => {
     try {
+      lastRepeatedRef.current = ''
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      streamRef.current = stream
 
       // Initialize MediaRecorder
       const mediaRecorder = new MediaRecorder(stream, {
@@ -66,6 +73,7 @@ export const useAudioRecorder = () => {
 
         // Stop all tracks and release the audio graph
         stream.getTracks().forEach(track => track.stop())
+        streamRef.current = null
         teardownAudioGraph()
       }
 
@@ -73,7 +81,7 @@ export const useAudioRecorder = () => {
       setIsRecording(true)
 
       // Initialize Speech Recognition if available
-      if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      if (options.speechRecognition !== false && ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
         const recognition = new SpeechRecognition()
 
@@ -84,10 +92,32 @@ export const useAudioRecorder = () => {
         recognition.onresult = (event) => {
           // Concatenate all results so the bubble updates live as the child speaks
           let text = ''
+          let hasFinalResult = false
           for (let i = 0; i < event.results.length; i++) {
             text += event.results[i][0].transcript
+            hasFinalResult = hasFinalResult || event.results[i].isFinal
           }
-          setTranscript(text.trim())
+          const phrase = text.trim()
+          setTranscript(phrase)
+
+          // Repeat the child's exact words as soon as recognition confirms the phrase.
+          if (options.repeatRecognized !== false && hasFinalResult && phrase && phrase !== lastRepeatedRef.current) {
+            window.clearTimeout(repeatTimeoutRef.current)
+            setIsRepeating(true)
+            const finishRepeat = () => setIsRepeating(false)
+            const repeated = repeatPhrase(phrase, {
+              lang: language,
+              onStart: () => setIsRepeating(true),
+              onEnd: finishRepeat,
+              onError: finishRepeat,
+            })
+            if (repeated) {
+              lastRepeatedRef.current = phrase
+              repeatTimeoutRef.current = window.setTimeout(finishRepeat, 4000)
+            } else {
+              finishRepeat()
+            }
+          }
         }
 
         recognition.onerror = (event) => {
@@ -107,7 +137,7 @@ export const useAudioRecorder = () => {
   }, [teardownAudioGraph])
   
   const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && isRecording) {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop()
       setIsRecording(false)
       
@@ -115,12 +145,26 @@ export const useAudioRecorder = () => {
         recognitionRef.current.stop()
       }
     }
-  }, [isRecording])
+  }, [])
   
   const resetRecording = useCallback(() => {
+    if (mediaRecorderRef.current?.state && mediaRecorderRef.current.state !== 'inactive') {
+      try { mediaRecorderRef.current.stop() } catch { /* already stopping */ }
+    }
+    streamRef.current?.getTracks().forEach((track) => track.stop())
+    streamRef.current = null
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop() } catch { /* already stopped */ }
+      recognitionRef.current = null
+    }
+    setIsRecording(false)
     setAudioBlob(null)
     setDuration(0)
     setTranscript('')
+    setIsRepeating(false)
+    window.clearTimeout(repeatTimeoutRef.current)
+    lastRepeatedRef.current = ''
+    window.speechSynthesis?.cancel()
     chunksRef.current = []
     teardownAudioGraph()
   }, [teardownAudioGraph])
@@ -130,6 +174,7 @@ export const useAudioRecorder = () => {
     audioBlob,
     duration,
     transcript,
+    isRepeating,
     analyserRef,
     startRecording,
     stopRecording,

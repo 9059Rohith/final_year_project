@@ -1,11 +1,11 @@
 export const ASSISTANCE_LEVELS = ['independent', 'verbal_prompt', 'visual_prompt', 'modelled', 'skipped']
 
 export const TALK_TOGETHER_MISSIONS = Object.freeze([
-  { id: 'choose-snack', title: 'Picnic Choice', icon: '🍎', caregiverCue: 'Place two familiar pretend snacks in view.', childPrompt: 'Show or tell me which snack you want.', celebrate: 'You made a choice!' },
-  { id: 'ask-more', title: 'Bubble Request', icon: '🫧', caregiverCue: 'Pretend to blow bubbles, then pause expectantly.', childPrompt: 'Ask me for more bubbles.', celebrate: 'Your request kept the game going!' },
-  { id: 'take-turn', title: 'Ball Turn', icon: '🔵', caregiverCue: 'Roll a soft ball or imaginary ball toward the child.', childPrompt: 'Tell me whose turn comes next.', celebrate: 'You shared a turn!' },
-  { id: 'find-treasure', title: 'Treasure Clue', icon: '⭐', caregiverCue: 'Choose one nearby object as the treasure.', childPrompt: 'Give me one clue about the treasure.', celebrate: 'Your clue helped me find it!' },
-  { id: 'kind-finish', title: 'Kind Finish', icon: '💛', caregiverCue: 'Offer a wave, high-five, or smile and wait.', childPrompt: 'Choose a kind way to finish our game.', celebrate: 'You finished the game together!' },
+  { id: 'ask-water', environment: 'kitchen', environmentIndex: 0, title: 'Water Request', childPrompt: 'Show or tell me that you want water.', caregiverCue: 'Pause with a cup in view and wait for any word, sound, picture, or gesture.', celebrate: 'You asked for what you needed!', celebrateTa: 'சிறப்பாக கேட்டாய்!', icon: '💧' },
+  { id: 'choose-snack', environment: 'grocery', environmentIndex: 1, title: 'Snack Choice', childPrompt: 'Choose between the two snacks.', caregiverCue: 'Offer two familiar pretend snacks and wait without rushing.', celebrate: 'You made a choice!', celebrateTa: 'அருமையான தேர்வு!', icon: '🍎' },
+  { id: 'name-object', environment: 'classroom', environmentIndex: 2, title: 'Find and Name', childPrompt: 'Find one familiar object and show or name it.', caregiverCue: 'Point to two nearby objects and let the child choose one.', celebrate: 'You found it!', celebrateTa: 'நன்றாக கண்டுபிடித்தாய்!', icon: '⭐' },
+  { id: 'imitate-turns', environment: 'park', environmentIndex: 3, title: 'Copy My Turn', childPrompt: 'Copy me, then let me copy you.', caregiverCue: 'Model one simple sound, gesture, or word, then swap roles.', celebrate: 'You shared two turns!', celebrateTa: 'மாறி மாறி அருமையாக செய்தாய்!', icon: '👏' },
+  { id: 'say-thanks', environment: 'birthday', environmentIndex: 4, title: 'Kind Thank You', childPrompt: 'Say, show, or choose thank you.', caregiverCue: 'Offer a pretend gift and wait for any thank-you response.', celebrate: 'You used a kind message!', celebrateTa: 'மிகவும் அருமை!', icon: '🎁' },
 ])
 
 export const TALK_TOGETHER_ACTIVITY = Object.freeze({

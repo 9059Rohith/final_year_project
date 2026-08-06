@@ -13,13 +13,19 @@ import cloudAnimationImg from '../assets/images/cloud_animation.png'
 import chefKidImg from '../assets/images/chef_kid.png'
 
 const registerSchema = z.object({
-  full_name: z.string().min(2, 'Name must be at least 2 characters'),
-  child_name: z.string().min(2, 'Child name must be at least 2 characters'),
+  full_name: z.string().trim().min(2, 'Name must be at least 2 characters').max(100, 'Name must be at most 100 characters'),
+  child_name: z.string().trim().min(2, 'Child name must be at least 2 characters').max(100, 'Child name must be at most 100 characters'),
   child_age: z.coerce.number().min(4, 'Age must be at least 4').max(12, 'Age must be at most 12'),
-  email: z.string().email('Please enter a valid email address'),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  email: z.string().trim().toLowerCase().email('Please enter a valid email address'),
+  password: z.string()
+    .min(10, 'Password must be at least 10 characters')
+    .max(72, 'Password must be at most 72 characters')
+    .regex(/[A-Z]/, 'Password needs an uppercase letter')
+    .regex(/[a-z]/, 'Password needs a lowercase letter')
+    .regex(/[0-9]/, 'Password needs a number')
+    .regex(/[^A-Za-z0-9]/, 'Password needs a special character'),
   confirmPassword: z.string().min(1, 'Please confirm your password'),
-  language: z.string().default('Tamil')
+  language: z.enum(['Tamil', 'Telugu', 'English']).default('Tamil')
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
@@ -30,12 +36,12 @@ export default function RegisterPage() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [step, setStep] = useState(1)
   const [isChecking, setIsChecking] = useState(true)
-  const { isAuthenticated, user, token } = useAuthStore()
+  const { isAuthenticated, user, authReady, setAuth } = useAuthStore()
   const navigate = useNavigate()
   
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (isAuthenticated && user && token) {
+      if (authReady && isAuthenticated && user) {
         if (user.role === 'admin') navigate('/admin', { replace: true })
         else navigate('/dashboard', { replace: true })
       } else {
@@ -43,7 +49,7 @@ export default function RegisterPage() {
       }
     }, 50)
     return () => clearTimeout(timer)
-  }, [isAuthenticated, user, token, navigate])
+  }, [authReady, isAuthenticated, user, navigate])
   
   const { register, handleSubmit, formState: { errors, isSubmitting }, trigger, watch } = useForm({
     resolver: zodResolver(registerSchema),
@@ -59,8 +65,8 @@ export default function RegisterPage() {
   const getPasswordStrength = () => {
     if (!password) return { level: 0, label: '', color: '' }
     let score = 0
-    if (password.length >= 8) score++
-    if (/[A-Z]/.test(password)) score++
+    if (password.length >= 10) score++
+    if (/[A-Z]/.test(password) && /[a-z]/.test(password)) score++
     if (/[0-9]/.test(password)) score++
     if (/[^A-Za-z0-9]/.test(password)) score++
     if (score <= 1) return { level: 1, label: 'Weak', color: 'bg-red-500' }
@@ -86,10 +92,19 @@ export default function RegisterPage() {
         confirm_password: data.confirmPassword,
         language: data.language
       }
-      await authAPI.register(registerData)
-      toast.success('Account created! Please sign in to start.')
-      navigate('/login')
+      const response = await authAPI.register(registerData)
+      setAuth(response.data.user, response.data.access_token)
+      toast.success('Account created! Welcome to SpeakEasy.')
+      navigate('/dashboard', { replace: true })
     } catch (error) {
+      if (!error.response) {
+        toast.error('Cannot reach the server. Please check that the backend is running.')
+        return
+      }
+      if (error.response.status === 503) {
+        toast.error(error.response.data?.detail || 'Registration is temporarily unavailable. Please try again in a moment.')
+        return
+      }
       if (error.response?.data?.detail) {
         const detail = error.response.data.detail
         if (Array.isArray(detail)) detail.forEach(err => toast.error(`${err.loc[1]}: ${err.msg}`))
@@ -196,10 +211,10 @@ export default function RegisterPage() {
               {step === 1 && (
                 <motion.div key="step1" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} className="space-y-5">
                   <div>
-                    <label className="block text-sm font-semibold text-neutral-700 mb-2">Parent / Guardian Name</label>
+                    <label htmlFor="register-full-name" className="block text-sm font-semibold text-neutral-700 mb-2">Parent / Guardian Name</label>
                     <div className="relative">
                       <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400" />
-                      <input {...register('full_name')} type="text"
+                      <input {...register('full_name')} id="register-full-name" type="text" autoComplete="name" maxLength={100}
                         className="w-full pl-12 pr-4 py-4 border-2 border-neutral-200 rounded-2xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all"
                         placeholder="Your full name" />
                     </div>
@@ -207,10 +222,10 @@ export default function RegisterPage() {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-semibold text-neutral-700 mb-2">Child's Name</label>
+                    <label htmlFor="register-child-name" className="block text-sm font-semibold text-neutral-700 mb-2">Child's Name</label>
                     <div className="relative">
                       <Heart className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400" />
-                      <input {...register('child_name')} type="text"
+                      <input {...register('child_name')} id="register-child-name" type="text" autoComplete="off" maxLength={100}
                         className="w-full pl-12 pr-4 py-4 border-2 border-neutral-200 rounded-2xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all"
                         placeholder="Your child's name" />
                     </div>
@@ -219,15 +234,15 @@ export default function RegisterPage() {
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-semibold text-neutral-700 mb-2">Child's Age</label>
-                      <input {...register('child_age')} type="number" min="4" max="12"
+                      <label htmlFor="register-child-age" className="block text-sm font-semibold text-neutral-700 mb-2">Child's Age</label>
+                      <input {...register('child_age')} id="register-child-age" type="number" min="4" max="12"
                         className="w-full px-4 py-4 border-2 border-neutral-200 rounded-2xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all"
                         placeholder="4-12" />
                       {errors.child_age && <p className="text-coral-500 text-sm mt-1.5">{errors.child_age.message}</p>}
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-neutral-700 mb-2">Language</label>
-                      <select {...register('language')}
+                      <label htmlFor="register-language" className="block text-sm font-semibold text-neutral-700 mb-2">Language</label>
+                      <select {...register('language')} id="register-language"
                         className="w-full px-4 py-4 border-2 border-neutral-200 rounded-2xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all appearance-none bg-white">
                         <option value="Tamil">Tamil</option>
                         <option value="Telugu">Telugu</option>
@@ -247,10 +262,10 @@ export default function RegisterPage() {
               {step === 2 && (
                 <motion.div key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
                   <div>
-                    <label className="block text-sm font-semibold text-neutral-700 mb-2">Email Address</label>
+                    <label htmlFor="register-email" className="block text-sm font-semibold text-neutral-700 mb-2">Email Address</label>
                     <div className="relative">
                       <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400" />
-                      <input {...register('email')} type="email"
+                      <input {...register('email')} id="register-email" type="email" autoComplete="email"
                         className="w-full pl-12 pr-4 py-4 border-2 border-neutral-200 rounded-2xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all"
                         placeholder="your@email.com" />
                     </div>
@@ -258,13 +273,14 @@ export default function RegisterPage() {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-semibold text-neutral-700 mb-2">Password</label>
+                    <label htmlFor="register-password" className="block text-sm font-semibold text-neutral-700 mb-2">Password</label>
                     <div className="relative">
                       <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400" />
-                      <input {...register('password')} type={showPassword ? 'text' : 'password'}
+                      <input {...register('password')} id="register-password" type={showPassword ? 'text' : 'password'} autoComplete="new-password" maxLength={72}
                         className="w-full pl-12 pr-12 py-4 border-2 border-neutral-200 rounded-2xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all"
-                        placeholder="Minimum 8 characters" />
+                        placeholder="Minimum 10 characters" />
                       <button type="button" onClick={() => setShowPassword(!showPassword)}
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
                         className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition">
                         {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                       </button>
@@ -284,13 +300,14 @@ export default function RegisterPage() {
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-semibold text-neutral-700 mb-2">Confirm Password</label>
+                    <label htmlFor="register-confirm-password" className="block text-sm font-semibold text-neutral-700 mb-2">Confirm Password</label>
                     <div className="relative">
                       <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-400" />
-                      <input {...register('confirmPassword')} type={showConfirmPassword ? 'text' : 'password'}
+                      <input {...register('confirmPassword')} id="register-confirm-password" type={showConfirmPassword ? 'text' : 'password'} autoComplete="new-password" maxLength={72}
                         className="w-full pl-12 pr-12 py-4 border-2 border-neutral-200 rounded-2xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all"
                         placeholder="Re-enter your password" />
                       <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        aria-label={showConfirmPassword ? 'Hide confirmed password' : 'Show confirmed password'}
                         className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 transition">
                         {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                       </button>
@@ -299,10 +316,10 @@ export default function RegisterPage() {
                   </div>
                   
                   <div className="flex items-start gap-3">
-                    <input type="checkbox" required className="w-4 h-4 mt-1 text-purple-600 border-neutral-300 rounded focus:ring-purple-500" />
-                    <span className="text-sm text-neutral-600">
-                      I agree to the <a href="#" className="text-purple-600 hover:text-purple-700 font-medium">Terms of Service</a> and <a href="#" className="text-purple-600 hover:text-purple-700 font-medium">Privacy Policy</a>
-                    </span>
+                    <input id="register-terms" type="checkbox" required className="w-4 h-4 mt-1 text-purple-600 border-neutral-300 rounded focus:ring-purple-500" />
+                    <label htmlFor="register-terms" className="text-sm text-neutral-600">
+                      I agree to the <Link to="/about#terms" className="text-purple-600 hover:text-purple-700 font-medium">Terms of Service</Link> and <Link to="/about#privacy" className="text-purple-600 hover:text-purple-700 font-medium">Privacy Policy</Link>
+                    </label>
                   </div>
                   
                   <div className="flex gap-3">

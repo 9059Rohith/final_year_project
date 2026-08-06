@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Home } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -8,6 +8,7 @@ import Slide2_Animation from './Slide2_Animation'
 import Slide3_Evaluation from './Slide3_Evaluation'
 import Slide4_CandleTest from './Slide4_CandleTest'
 import Slide5_Rewards from './Slide5_Rewards'
+import PippinTrainingCoach from './PippinTrainingCoach'
 
 // Per-slide ambient background tint (mega-prompt: each slide breathes its own colour)
 const SLIDE_THEME = {
@@ -22,12 +23,15 @@ export default function SlideManager({ lesson }) {
   const navigate = useNavigate()
   const { currentSlide, prevSlide, nextSlide, setCurrentSlide, resetSession } = useTherapyStore()
   const [showExitModal, setShowExitModal] = useState(false)
+  const [coachActivity, setCoachActivity] = useState({})
 
   // Letters skip the candle test (slide 4); words include all slides
   const slides = lesson.type === 'letter' ? [1, 2, 3, 5] : [1, 2, 3, 4, 5]
   const stepIndex = Math.max(0, slides.indexOf(currentSlide))
   const totalSteps = slides.length
   const theme = SLIDE_THEME[currentSlide] || SLIDE_THEME[1]
+
+  useEffect(() => setCoachActivity({}), [currentSlide, lesson.id])
 
   const handleExit = () => {
     resetSession()
@@ -41,7 +45,7 @@ export default function SlideManager({ lesson }) {
       case 2:
         return <Slide2_Animation lesson={lesson} onNext={nextSlide} onPrev={prevSlide} />
       case 3:
-        return <Slide3_Evaluation lesson={lesson} onNext={nextSlide} onPrev={prevSlide} />
+        return <Slide3_Evaluation lesson={lesson} onNext={nextSlide} onPrev={prevSlide} onCoachStateChange={setCoachActivity} />
       case 4:
         if (lesson.type === 'word') {
           return <Slide4_CandleTest lesson={lesson} onNext={nextSlide} onPrev={prevSlide} />
@@ -128,18 +132,23 @@ export default function SlideManager({ lesson }) {
       </div>
 
       {/* ── Slide content ── */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={currentSlide}
-          initial={{ opacity: 0, x: 80 }}
-          animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -80 }}
-          transition={{ type: 'spring', stiffness: 260, damping: 30 }}
-          className="min-h-[calc(100vh-92px)]"
-        >
-          {renderSlide()}
-        </motion.div>
-      </AnimatePresence>
+      <div className="training-session-layout" data-testid="training-session-layout">
+        <section className="training-session-content">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentSlide}
+              initial={{ opacity: 0, x: 80 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -80 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 30 }}
+              className="min-h-[calc(100vh-92px)]"
+            >
+              {renderSlide()}
+            </motion.div>
+          </AnimatePresence>
+        </section>
+        <PippinTrainingCoach lesson={lesson} slide={currentSlide} activity={coachActivity} />
+      </div>
 
       {/* ── Exit confirmation modal ── */}
       <AnimatePresence>

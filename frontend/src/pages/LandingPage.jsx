@@ -5,12 +5,12 @@ import {
   Target, Lock, Globe, Gamepad2, BarChart3, Brain, ArrowRight, ArrowUp,
   PlayCircle, CheckCircle, Star, Sparkles, Mail, MapPin, Phone, Award, 
   Users, Lightbulb, Shield, Mic, Camera, Heart, ChevronDown, ChevronRight,
-  Zap, BookOpen, GraduationCap, Volume2, Menu, X, Github, Linkedin, Twitter,
+  Zap, BookOpen, GraduationCap, Volume2, Menu, X,
   Send, Clock, Trophy, Eye, MessageCircle, HelpCircle, Plus, Minus, ArrowDown
 } from 'lucide-react'
 import { contactAPI } from '../services/api'
 import toast from 'react-hot-toast'
-import { useNavigate } from 'react-router-dom'
+import { Link as RouterLink, useNavigate } from 'react-router-dom'
 import { Link as ScrollLink } from 'react-scroll'
 
 // Import local assets
@@ -1167,18 +1167,6 @@ export default function LandingPage() {
               <p className="text-neutral-400 mb-6 text-sm italic">
                 "Every voice matters. Every sound is progress." 🌟
               </p>
-              <div className="flex gap-3">
-                {[
-                  { icon: Github, label: 'GitHub' },
-                  { icon: Linkedin, label: 'LinkedIn' },
-                  { icon: Twitter, label: 'Twitter' },
-                ].map((social, i) => (
-                  <a key={i} href="#" aria-label={social.label}
-                    className="w-10 h-10 bg-neutral-800 hover:bg-primary-600 rounded-xl flex items-center justify-center transition-all duration-300 hover:scale-110">
-                    <social.icon className="w-4 h-4" />
-                  </a>
-                ))}
-              </div>
             </div>
             
             {/* Quick Links */}
@@ -1201,12 +1189,18 @@ export default function LandingPage() {
             <div>
               <h4 className="font-bold text-lg mb-6">Resources</h4>
               <ul className="space-y-3 text-neutral-400 text-sm">
-                {['Documentation', 'Support Center', 'Research Paper', 'API Reference', 'Privacy Policy', 'Terms of Service'].map((item) => (
-                  <li key={item}>
-                    <a href="#" className="hover:text-primary-400 transition flex items-center gap-2">
+                {[
+                  { label: 'Documentation', path: '/help' },
+                  { label: 'Support Center', path: '/help#contact-support' },
+                  { label: 'Research & Privacy', path: '/about#privacy' },
+                  { label: 'Privacy Policy', path: '/about#privacy' },
+                  { label: 'Terms of Service', path: '/about#terms' },
+                ].map((item) => (
+                  <li key={item.label}>
+                    <RouterLink to={item.path} className="hover:text-primary-400 transition flex items-center gap-2">
                       <ChevronRight className="w-3 h-3" />
-                      {item}
-                    </a>
+                      {item.label}
+                    </RouterLink>
                   </li>
                 ))}
               </ul>

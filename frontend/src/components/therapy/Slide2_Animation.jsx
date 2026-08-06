@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Play, Pause, RotateCcw, Mic, Volume2, Video } from 'lucide-react'
+import { getPippinTargetText } from '../../features/pippin/trainingPippin'
+import { stopCharacterSpeech } from '../../features/characters/characterVoice'
+import { repeatPhrase } from '../../utils/speechRepeat'
 
 // Import pronunciation video
 import pronunciationAVideo from '../../assets/videos/pronounciation_a.mp4'
@@ -10,7 +13,6 @@ export default function Slide2_Animation({ lesson, onNext, onPrev }) {
   const [videoAvailable, setVideoAvailable] = useState(false)
   const [videoError, setVideoError] = useState(false)
   const videoRef = useRef(null)
-  const audioRef = useRef(null)
   
   // Map phoneme to video path - for now we have video for 'a'
   const videoMap = {
@@ -33,36 +35,49 @@ export default function Slide2_Animation({ lesson, onNext, onPrev }) {
     }
   }, [lesson.phoneme, videoPath])
   
-  const handlePlayVideo = () => {
+  const playPippinTarget = () => {
+    const spoken = repeatPhrase(getPippinTargetText(lesson), {
+      lang: 'en-IN',
+      onStart: () => setIsPlaying(true),
+      onEnd: () => setIsPlaying(false),
+      onError: () => setIsPlaying(false),
+    })
+    if (!spoken) setIsPlaying(false)
+  }
+
+  const handlePlayVideo = async () => {
     if (videoRef.current && videoAvailable) {
-      videoRef.current.play()
-      setIsPlaying(true)
-    } else if (audioRef.current) {
-      audioRef.current.play()
-      setIsPlaying(true)
+      try {
+        await videoRef.current.play()
+        setIsPlaying(true)
+      } catch {
+        setVideoError(true)
+        playPippinTarget()
+      }
+    } else {
+      playPippinTarget()
     }
   }
   
   const handlePause = () => {
     if (videoRef.current && videoAvailable) {
       videoRef.current.pause()
-    } else if (audioRef.current) {
-      audioRef.current.pause()
+    } else {
+      stopCharacterSpeech()
     }
     setIsPlaying(false)
   }
   
-  const handleReplay = () => {
+  const handleReplay = async () => {
     if (videoRef.current && videoAvailable) {
       videoRef.current.currentTime = 0
-      videoRef.current.play()
-      setIsPlaying(true)
-    } else if (audioRef.current) {
-      audioRef.current.currentTime = 0
-      audioRef.current.play()
-      setIsPlaying(true)
+      await handlePlayVideo()
+    } else {
+      playPippinTarget()
     }
   }
+
+  useEffect(() => () => stopCharacterSpeech(), [])
   
   return (
     <div className="h-full flex items-center justify-center p-8">
@@ -88,13 +103,6 @@ export default function Slide2_Animation({ lesson, onNext, onPrev }) {
               </div>
             </div>
           )}
-          
-          {/* Hidden audio for fallback */}
-          <audio
-            ref={audioRef}
-            src={lesson.audio}
-            onEnded={() => setIsPlaying(false)}
-          />
           
           {/* Video/Animation container */}
           <div className="bg-gradient-to-br from-gray-100 to-gray-200 rounded-3xl p-8 mb-8">

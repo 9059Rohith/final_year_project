@@ -1,33 +1,11 @@
-import { useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Volume2 } from 'lucide-react'
-import { Howl } from 'howler'
-import { useSettingsStore } from '../../store/settingsStore'
-import MitraCompanion from '../three/MitraCompanion'
+import { getPippinTargetText } from '../../features/pippin/trainingPippin'
+import { repeatPhrase } from '../../utils/speechRepeat'
 
 export default function Slide1_Picture({ lesson, onNext }) {
-  const { autoPlay, soundEnabled } = useSettingsStore()
-
-  useEffect(() => {
-    // Auto-play audio on mount, if the user hasn't disabled it
-    if (lesson.audio && autoPlay && soundEnabled) {
-      playAudio()
-    }
-  }, [])
-  
   const playAudio = () => {
-    try {
-      const sound = new Howl({
-        src: [lesson.audio],
-        html5: true,
-        onloaderror: (id, error) => {
-          console.log('Audio load error, using fallback')
-        }
-      })
-      sound.play()
-    } catch (error) {
-      console.log('Audio playback error')
-    }
+    repeatPhrase(getPippinTargetText(lesson), { lang: 'en-IN' })
   }
   
   return (
@@ -100,31 +78,23 @@ export default function Slide1_Picture({ lesson, onNext }) {
               transition={{ delay: 0.3 }}
               className="w-full"
             >
-              {/* Image or placeholder */}
-              <div className="w-full aspect-square bg-gradient-to-br from-secondary/20 to-accent/20 rounded-3xl flex items-center justify-center mb-6 overflow-hidden">
-                <img
-                  src={lesson.image}
-                  alt={lesson.english}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    // Fallback to emoji
-                    e.target.style.display = 'none'
-                    e.target.nextElementSibling.style.display = 'flex'
-                  }}
-                />
-                <div className="hidden w-full h-full items-center justify-center">
-                  <div className="text-9xl">
-                    {lesson.type === 'word' ? (
-                      lesson.phoneme === 'amma' ? '👩' : '👨'
-                    ) : (
-                      '📖'
-                    )}
-                  </div>
+              {/* Built-in visual: lessons must not depend on optional image files. */}
+              <div
+                data-testid="lesson-built-in-visual"
+                role="img"
+                aria-label={`${lesson.english} pronunciation symbol`}
+                className="w-full aspect-square bg-gradient-to-br from-secondary/20 to-accent/20 rounded-3xl flex flex-col items-center justify-center mb-6 overflow-hidden"
+              >
+                <div className="tamil-letter text-9xl font-bold text-primary mb-4">
+                  {lesson.type === 'word'
+                    ? (lesson.phoneme === 'amma' ? '👩' : lesson.phoneme === 'appa' ? '👨' : '💬')
+                    : lesson.symbol}
                 </div>
+                <div className="text-3xl font-bold text-gray-700">{lesson.english}</div>
               </div>
               
               <p className="text-center text-gray-600 mb-6 italic">
-                Real image of what this sounds like
+                Look at the symbol, then listen and repeat the sound.
               </p>
               
               <button
@@ -161,16 +131,6 @@ export default function Slide1_Picture({ lesson, onNext }) {
           </button>
         </motion.div>
       </div>
-
-      {/* MITRA Companion — fixed bottom-right */}
-      <motion.div
-        initial={{ opacity: 0, x: 80 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: 0.8, type: 'spring', stiffness: 200 }}
-        className="fixed bottom-6 right-6 z-40 pointer-events-none"
-      >
-        <MitraCompanion slide={1} compact />
-      </motion.div>
     </div>
   )
 }

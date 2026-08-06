@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { measureMouthGeometry } from '../features/mouthMirror/mouthGeometry'
 
 export const useFaceDetection = (videoRef, canvasRef) => {
   const [faceData, setFaceData] = useState({
     faceDetected: false,
+    mouthWidth: 0,
+    mouthHeight: 0,
     mouthOpenRatio: 0,
-    mouthIsOpen: false,
-    stressLevel: 0,
-    emotion: 'neutral'
+    mouthIsOpen: false
   })
   const [isProcessing, setIsProcessing] = useState(false)
   const faceMeshRef = useRef(null)
@@ -18,7 +19,7 @@ export const useFaceDetection = (videoRef, canvasRef) => {
       try {
         const faceMesh = new window.FaceMesh({
           locateFile: (file) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/${file}`
           }
         })
         
@@ -34,7 +35,7 @@ export const useFaceDetection = (videoRef, canvasRef) => {
         
         console.log('✅ MediaPipe Face Mesh initialized')
       } catch (error) {
-        console.error('Error initializing Face Mesh:', error)
+        console.warn('Face tracking is unavailable; speech practice will continue:', error)
       }
     }
     
@@ -71,16 +72,12 @@ export const useFaceDetection = (videoRef, canvasRef) => {
         ctx.fill()
       })
       
-      // Calculate mouth metrics
+      const geometry = measureMouthGeometry(landmarks)
       const upperLip = landmarks[13]
-      const lowerLip = landmarks[14]
       const leftCorner = landmarks[61]
-      const rightCorner = landmarks[291]
-      
-      const mouthHeight = Math.abs(lowerLip.y - upperLip.y) * canvas.height
-      const mouthWidth = Math.abs(rightCorner.x - leftCorner.x) * canvas.width
-      
-      const mouthOpenRatio = mouthWidth > 0 ? mouthHeight / mouthWidth : 0
+      const mouthHeight = (geometry?.mouthHeight || 0) * canvas.height
+      const mouthWidth = (geometry?.mouthWidth || 0) * canvas.width
+      const mouthOpenRatio = geometry?.mouthOpenRatio || 0
       const mouthIsOpen = mouthOpenRatio > 0.35
       
       // Draw mouth bounding box
@@ -93,31 +90,20 @@ export const useFaceDetection = (videoRef, canvasRef) => {
         mouthHeight + 10
       )
       
-      // Calculate stress level (simplified)
-      const leftBrowInner = landmarks[70]
-      const rightBrowInner = landmarks[300]
-      const browDistance = Math.abs(rightBrowInner.x - leftBrowInner.x) * canvas.width
-      const normalizedDistance = browDistance / (canvas.width * 0.12)
-      const stressLevel = Math.max(0, Math.min(1, 1.5 - normalizedDistance))
-      
-      const emotion = stressLevel > 0.6 ? 'stressed' : 
-                     stressLevel > 0.3 ? 'focused' : 
-                     mouthIsOpen ? 'engaged' : 'calm'
-      
       setFaceData({
         faceDetected: true,
+        mouthWidth: geometry?.mouthWidth || 0,
+        mouthHeight: geometry?.mouthHeight || 0,
         mouthOpenRatio,
-        mouthIsOpen,
-        stressLevel,
-        emotion
+        mouthIsOpen
       })
     } else {
       setFaceData({
         faceDetected: false,
+        mouthWidth: 0,
+        mouthHeight: 0,
         mouthOpenRatio: 0,
-        mouthIsOpen: false,
-        stressLevel: 0,
-        emotion: 'neutral'
+        mouthIsOpen: false
       })
     }
   }, [canvasRef])
@@ -130,7 +116,16 @@ export const useFaceDetection = (videoRef, canvasRef) => {
     try {
       await faceMeshRef.current.send({ image: videoRef.current })
     } catch (error) {
-      console.error('Error processing frame:', error)
+      console.warn('Face tracking stopped; speech practice will continue:', error)
+      setIsProcessing(false)
+      setFaceData({
+        faceDetected: false,
+        mouthWidth: 0,
+        mouthHeight: 0,
+        mouthOpenRatio: 0,
+        mouthIsOpen: false,
+      })
+      return
     }
     
     animationFrameRef.current = requestAnimationFrame(processFrame)

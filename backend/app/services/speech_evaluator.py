@@ -1,6 +1,8 @@
 """Speech evaluation service using ML models."""
 import io
 import numpy as np
+import re
+import threading
 from typing import Dict, Tuple
 import warnings
 warnings.filterwarnings('ignore')
@@ -34,12 +36,21 @@ class SpeechEvaluator:
     """Speech evaluation service using Wav2Vec2 for accurate phoneme recognition."""
     
     def __init__(self):
-        """Initialize speech evaluator with pretrained Wav2Vec2 model."""
+        """Initialize lightweight metadata; load the ML model on first use."""
         self.model = None
         self.processor = None
+        self._model_attempted = False
+        self._model_lock = threading.Lock()
         self.reference_mfccs = self._init_reference_mfccs()
-        
-        if TRANSFORMERS_AVAILABLE:
+
+    def _ensure_model(self) -> None:
+        """Load the optional ASR model once, outside application startup."""
+        if self._model_attempted or not TRANSFORMERS_AVAILABLE:
+            return
+        with self._model_lock:
+            if self._model_attempted:
+                return
+            self._model_attempted = True
             try:
                 print("[INFO] Loading Wav2Vec2 model...")
                 model_name = "facebook/wav2vec2-base-960h"
@@ -52,8 +63,10 @@ class SpeechEvaluator:
                 print("   Using fallback MFCC-based evaluation")
                 self.model = None
                 self.processor = None
-        else:
-            print("[WARN] Transformers library not available. Install: pip install transformers torch")
+
+    def warm_up(self) -> None:
+        """Load the recognizer in a background worker before the first recording."""
+        self._ensure_model()
     
     def _init_reference_mfccs(self) -> Dict[str, np.ndarray]:
         """Initialize reference MFCC templates for each phoneme."""
@@ -77,7 +90,8 @@ class SpeechEvaluator:
     def evaluate_pronunciation(
         self,
         audio_bytes: bytes,
-        target_phoneme: str
+        target_phoneme: str,
+        browser_transcript: str = "",
     ) -> Dict:
         """
         Evaluate pronunciation of audio against target phoneme.
@@ -89,9 +103,36 @@ class SpeechEvaluator:
         Returns:
             Dictionary with evaluation metrics
         """
+        target_phoneme = str(target_phoneme).strip().lower()
         print(f"\n[EVAL] Evaluating pronunciation for: {target_phoneme}")
-        
+
         try:
+            if target_phoneme not in self.reference_mfccs:
+                return self._rejected_result(
+                    "invalid_target",
+                    "This lesson target is not supported.",
+                )
+
+            signal = self._analyze_signal(audio_bytes)
+            if not signal["has_speech"]:
+                return self._rejected_result(
+                    "no_speech",
+                    "I could not hear a clear voice. Move closer to the microphone and try again.",
+                )
+
+            duration_matches = self._duration_matches_target(
+                target_phoneme, signal["active_duration"]
+            )
+            browser_transcript = str(browser_transcript or "").strip()[:64]
+            browser_match = self._match_phoneme(browser_transcript, target_phoneme)
+
+            # Chrome/Edge speech recognition is substantially better at short
+            # Tamil words than an English sentence ASR model. A matching browser
+            # transcript is still accepted only after real audio and duration
+            # checks above, and it is never persisted by this service.
+            if not browser_match:
+                self._ensure_model()
+
             # Extract MFCC features
             user_mfcc = extract_mfcc(audio_bytes)
             print(f"[INFO] User MFCC extracted: shape {user_mfcc.shape}")
@@ -112,27 +153,30 @@ class SpeechEvaluator:
             print(f"[INFO] Airflow Score: {airflow_score:.2f}")
             
             # Phoneme recognition using Wav2Vec2
-            phoneme_match = False
-            transcription = ""
+            phoneme_match = browser_match
+            transcription = browser_transcript
+            validation_source = "browser_speech_recognition" if browser_match else "none"
 
-            if self.model and self.processor:
+            if not browser_match and self.model and self.processor:
                 try:
                     transcription = self._transcribe_audio(audio_bytes)
                     phoneme_match = self._match_phoneme(transcription, target_phoneme)
+                    if phoneme_match:
+                        validation_source = "server_asr"
                     print(f"[INFO] Transcription: '{transcription}' | Match: {phoneme_match}")
                 except Exception as e:
                     print(f"[WARN] Transcription error: {e}")
-                    # Fallback: use MFCC score as proxy
-                    phoneme_match = mfcc_score > 65
-            else:
-                # Fallback: use MFCC score as proxy
-                phoneme_match = mfcc_score > 65
-                print(f"[INFO] Using MFCC-based phoneme matching: {phoneme_match}")
+                    phoneme_match = False
+            elif not browser_match:
+                # Acoustic features can reject silence and poor recordings, but
+                # they cannot honestly identify one authored phoneme from another.
+                phoneme_match = False
+                print("[INFO] Recognizer unavailable; acoustic-only result cannot pass")
 
             # Real syllable-level GOP via VTLN + DTW forced alignment over the
             # Wav2Vec2 CTC posteriorgram. Reference-free; None if model absent.
             gop_result = None
-            if self.model and self.processor:
+            if not browser_match and self.model and self.processor:
                 try:
                     audio_np = self._load_audio_array(audio_bytes)
                     gop_result = advanced_speech.syllable_gop(
@@ -152,20 +196,38 @@ class SpeechEvaluator:
             else:
                 gop_score = mfcc_score * 0.9
 
+            if gop_result and gop_result["overall_gop"] >= 0.55:
+                phoneme_match = True
+                validation_source = "server_gop"
+            phoneme_match = bool(phoneme_match and duration_matches)
+
             # Calculate overall accuracy (GOP, when present, is the strongest signal)
             accuracy = self._calculate_accuracy(
                 mfcc_score, airflow_score, phoneme_match,
                 gop_score=gop_result["overall_gop"] * 100.0 if gop_result else None,
             )
+            if not phoneme_match:
+                accuracy = min(accuracy, 69.0)
+            else:
+                # An exact recognizer match plus verified voice activity is the
+                # strongest signal for these isolated curriculum sounds. Keep the
+                # displayed score consistent with the validated outcome.
+                accuracy = max(accuracy, 82.0)
+            if not duration_matches:
+                accuracy = min(accuracy, 40.0)
             print(f"[INFO] Final Accuracy: {accuracy:.2f}%")
 
             # Generate feedback (syllable-aware when GOP is available)
-            feedback = self._generate_feedback(
-                target_phoneme,
-                accuracy,
-                phoneme_match,
-                airflow_score,
-                gop_result=gop_result,
+            feedback = (
+                self._duration_feedback(target_phoneme)
+                if not duration_matches
+                else self._generate_feedback(
+                    target_phoneme,
+                    accuracy,
+                    phoneme_match,
+                    airflow_score,
+                    gop_result=gop_result,
+                )
             )
 
             result = {
@@ -178,6 +240,17 @@ class SpeechEvaluator:
                 "transcription": transcription if transcription else "(no speech detected)",
                 "syllable_scores": gop_result["syllables"] if gop_result else [],
                 "weakest_syllable": gop_result["weakest_syllable"] if gop_result else None,
+                "validation_status": (
+                    "duration_mismatch"
+                    if not duration_matches
+                    else "validated"
+                    if phoneme_match
+                    else "not_matched"
+                    if browser_transcript or (self.model and self.processor)
+                    else "recognizer_unavailable"
+                ),
+                "validation_source": validation_source if phoneme_match else "none",
+                "active_duration_ms": round(signal["active_duration"] * 1000),
             }
             
             print(f"[OK] Evaluation complete: accuracy={result['accuracy']}\n")
@@ -194,8 +267,57 @@ class SpeechEvaluator:
                 "gop_score": 45.0,
                 "airflow_score": 0.5,
                 "feedback": "Could not process audio properly. Please ensure you're speaking clearly.",
-                "transcription": "(error processing audio)"
+                "transcription": "(error processing audio)",
+                "validation_status": "processing_error",
+                "validation_source": "none",
             }
+
+    @staticmethod
+    def _rejected_result(validation_status: str, feedback: str) -> Dict:
+        return {
+            "accuracy": 0.0,
+            "phoneme_match": False,
+            "mfcc_score": 0.0,
+            "gop_score": 0.0,
+            "airflow_score": 0.0,
+            "feedback": feedback,
+            "transcription": "",
+            "syllable_scores": [],
+            "weakest_syllable": None,
+            "validation_status": validation_status,
+            "validation_source": "none",
+            "active_duration_ms": 0,
+        }
+
+    @staticmethod
+    def _duration_matches_target(target: str, active_duration: float) -> bool:
+        minimum_duration = {
+            "a": 0.18,
+            "aa": 0.40,
+            "la": 0.25,
+            "ta": 0.18,
+            "amma": 0.45,
+            "appa": 0.45,
+        }
+        return active_duration >= minimum_duration.get(target, float("inf"))
+
+    @staticmethod
+    def _analyze_signal(audio_bytes: bytes) -> Dict:
+        audio_io = io.BytesIO(audio_bytes)
+        audio, sample_rate = librosa.load(audio_io, sr=16000, mono=True)
+        if audio.size == 0 or not np.all(np.isfinite(audio)):
+            return {"has_speech": False, "active_duration": 0.0}
+        peak = float(np.max(np.abs(audio)))
+        rms = float(np.sqrt(np.mean(np.square(audio))))
+        trimmed, _ = librosa.effects.trim(audio, top_db=25)
+        active_duration = float(len(trimmed) / sample_rate) if sample_rate else 0.0
+        has_speech = peak >= 0.015 and rms >= 0.005 and active_duration >= 0.12
+        return {
+            "has_speech": has_speech,
+            "active_duration": active_duration,
+            "peak": peak,
+            "rms": rms,
+        }
     
     def _load_audio_array(self, audio_bytes: bytes) -> np.ndarray:
         """Load audio bytes into a normalized, trimmed 16 kHz mono waveform."""
@@ -257,35 +379,41 @@ class SpeechEvaluator:
             return False
             
         target = target.lower().strip()
-        transcription = transcription.lower().strip()
-        
-        # Direct match
-        if target in transcription:
-            return True
-        
-        # Phoneme mapping for Tamil sounds to English approximations
-        phoneme_map = {
-            "a": ["a", "ah", "uh", "aa"],
-            "aa": ["aa", "ah", "aah", "a"],
-            "la": ["la", "lah", "l", "lla"],
-            "ta": ["ta", "tah", "t", "tha", "da"],
-            "amma": ["amma", "ama", "ma", "mom", "mother"],
-            "appa": ["appa", "apa", "pa", "dad", "father", "papa"]
+        compact_transcript = re.sub(r"[\s\-_.!,?'\"]+", "", transcription.lower())
+        tamil_variants = {
+            "a": {"அ"},
+            "aa": {"ஆ"},
+            "la": {"ல", "லா"},
+            "ta": {"த", "தா"},
+            "amma": {"அம்மா"},
+            "appa": {"அப்பா"},
         }
-        
-        # Check if any variation matches
-        if target in phoneme_map:
-            for variant in phoneme_map[target]:
-                if variant in transcription:
-                    print(f"   [OK] Phoneme match found: '{variant}' in '{transcription}'")
-                    return True
-        
-        # Fuzzy matching - check if first letter matches
-        if transcription and target and transcription[0] == target[0]:
-            print(f"   [~] Partial match: First letter '{target[0]}' matches")
+        if compact_transcript in tamil_variants.get(target, set()):
             return True
-        
-        return False
+        tokens = re.findall(r"[a-z]+", transcription.lower())
+        if not tokens:
+            return False
+        compact = "".join(tokens)
+
+        phoneme_map = {
+            "a": {"a", "ah", "uh"},
+            "aa": {"a", "aa", "ah", "aah", "ahh", "aaa"},
+            "la": {"la", "lah", "lla"},
+            "ta": {"ta", "tah", "tha", "da", "tall"},
+            "amma": {"amma", "ama", "ema", "emma", "ummah", "mom", "mother"},
+            "appa": {"appa", "apa", "uppah", "upah", "upper", "papa", "dad", "father"},
+        }
+        variants = phoneme_map.get(target, set())
+        matched = any(token in variants for token in tokens) or compact in variants
+        if matched:
+            print(f"   [OK] Complete phoneme token matched in '{transcription}'")
+        return matched
+
+    @staticmethod
+    def _duration_feedback(target_phoneme: str) -> str:
+        if target_phoneme == "aa":
+            return "I heard the sound. Hold 'AA' a little longer, then try again."
+        return f"I heard you. Say the whole '{target_phoneme}' sound once more."
     
     def _calculate_accuracy(
         self,

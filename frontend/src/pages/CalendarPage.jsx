@@ -45,6 +45,7 @@ export default function CalendarPage() {
   const [viewDate, setViewDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1))
   const [selectedDay, setSelectedDay] = useState(today.getDate())
   const [holidayMode, setHolidayMode] = useState(false)
+  const [reminders, setReminders] = useState(() => new Set())
 
   const year = viewDate.getFullYear()
   const month = viewDate.getMonth()
@@ -89,6 +90,21 @@ export default function CalendarPage() {
       const nv = !v
       toast.success(nv ? 'Holiday Mode on — sessions paused' : 'Holiday Mode off — schedule resumed')
       return nv
+    })
+  }
+
+  const toggleReminder = (session) => {
+    const key = `${year}-${month}-${selectedDay}-${session.title}`
+    setReminders((previous) => {
+      const next = new Set(previous)
+      if (next.has(key)) {
+        next.delete(key)
+        toast.success('Reminder removed')
+      } else {
+        next.add(key)
+        toast.success('Reminder saved on this device')
+      }
+      return next
     })
   }
 
@@ -254,10 +270,10 @@ export default function CalendarPage() {
                       </div>
                       {s.status === 'upcoming' && (
                         <GradientButton
-                          onClick={() => toast.success(`Reminder set for "${s.title}"`)}
+                          onClick={() => toggleReminder(s)}
                           className="w-full mt-3 !py-2"
                         >
-                          Set Reminder
+                          {reminders.has(`${year}-${month}-${selectedDay}-${s.title}`) ? 'Remove Reminder' : 'Set Reminder'}
                         </GradientButton>
                       )}
                     </motion.div>

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Video, Play, Bookmark, Clock, Sparkles, History, Flame,
@@ -7,6 +7,7 @@ import DashboardLayout from '../components/layout/DashboardLayout'
 import { Card, SectionTitle, Badge } from '../components/ui'
 import { useAuthStore } from '../store/authStore'
 import toast from 'react-hot-toast'
+import pronunciationAVideo from '../assets/videos/pronounciation_a.mp4'
 
 const CATEGORIES = ['All', 'Vowels', 'Consonants', 'Words', 'Tips']
 
@@ -37,6 +38,7 @@ export default function VideosPage() {
   const { user } = useAuthStore()
   const [filter, setFilter] = useState('All')
   const [bookmarks, setBookmarks] = useState(new Set([1, 5]))
+  const videoRef = useRef(null)
 
   const filtered = useMemo(
     () => (filter === 'All' ? VIDEOS : VIDEOS.filter((v) => v.category === filter)),
@@ -57,7 +59,15 @@ export default function VideosPage() {
     })
   }
 
-  const playVideo = (title) => toast(`▶️ Playing “${title}”`, { icon: '🎬' })
+  const playVideo = (video) => {
+    if (video.id !== 1) {
+      toast('This lesson is being prepared. Try the featured A lesson now.', { icon: '🎬' })
+      videoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    videoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    videoRef.current?.play().catch(() => {})
+  }
 
   return (
     <DashboardLayout
@@ -73,18 +83,15 @@ export default function VideosPage() {
               <div className="absolute inset-0 bg-grid opacity-10" />
               <div className="absolute -right-10 -top-10 w-52 h-52 bg-white/10 rounded-full blur-3xl" />
               <video
-                poster=""
-                className="hidden"
-                src="/src/assets/videos/pronounciation_a.mp4"
-              />
-              <motion.button
-                whileHover={{ scale: 1.08 }}
-                whileTap={{ scale: 0.94 }}
-                onClick={() => playVideo('Daily Lesson: The Vowel அ')}
-                className="relative z-10 w-20 h-20 rounded-full bg-white/95 flex items-center justify-center shadow-2xl"
+                ref={videoRef}
+                data-testid="pronunciation-video"
+                controls
+                preload="metadata"
+                className="relative z-10 h-full w-full object-contain bg-neutral-950"
+                src={pronunciationAVideo}
               >
-                <Play className="w-9 h-9 text-primary-600 fill-primary-600 ml-1" />
-              </motion.button>
+                Your browser does not support the pronunciation video.
+              </video>
             </div>
             <div className="lg:col-span-2 p-7 flex flex-col justify-center">
               <Badge color="gold" className="w-fit mb-3">
@@ -143,7 +150,8 @@ export default function VideosPage() {
                   <div className={`relative aspect-video bg-gradient-to-br ${v.grad} flex items-center justify-center group`}>
                     <div className="absolute inset-0 bg-grid opacity-10" />
                     <button
-                      onClick={() => playVideo(v.title)}
+                      onClick={() => playVideo(v)}
+                      aria-label={v.id === 1 ? `Play ${v.title}` : `${v.title} preview unavailable`}
                       className="relative z-10 w-14 h-14 rounded-full bg-white/90 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform"
                     >
                       <Play className="w-6 h-6 text-neutral-800 fill-neutral-800 ml-0.5" />
@@ -187,7 +195,7 @@ export default function VideosPage() {
               <motion.button
                 key={v.id}
                 whileHover={{ y: -4 }}
-                onClick={() => playVideo(v.title)}
+                onClick={() => playVideo(v)}
                 className="shrink-0 w-56 text-left"
               >
                 <div className={`relative aspect-video rounded-2xl bg-gradient-to-br ${v.grad} flex items-center justify-center mb-2`}>

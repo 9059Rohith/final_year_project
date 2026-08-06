@@ -113,3 +113,22 @@ test('leaving a live microphone activity stops every media track and stores no t
   const saved = await page.evaluate(() => JSON.stringify({ ...localStorage }))
   expect(saved).not.toMatch(/transcript|audioBlob|video|frames/i)
 })
+
+test('the four upgraded games expose their animated scene states while Pippin stays available', async ({ page }) => {
+  await page.goto('/play/arcade/breath-balloon')
+  await expect(page.locator('.breath-card')).toBeVisible()
+
+  await page.goto('/play/quest/river-rescue')
+  await expect(page.locator('[data-testid="kavi-picture-scene"]')).toHaveAttribute('data-mood', 'idle')
+  await expect(page.locator('.kavi-river-effects')).toBeVisible()
+
+  await page.goto('/play/mouth-mirror')
+  await page.getByRole('button', { name: 'Model only' }).click()
+  await expect(page.locator('.mouth-guide')).toHaveAttribute('data-visual-state', 'model')
+
+  await page.goto('/play/together')
+  await expect(page.locator('.together-environment')).toHaveAttribute('data-environment', 'kitchen')
+
+  await page.goto('/play/pippin')
+  await expect(page.getByRole('heading', { name: /Talk with Pippin/ })).toBeVisible()
+})

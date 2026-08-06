@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -10,6 +10,7 @@ import toast from 'react-hot-toast'
 import DashboardLayout from '../components/layout/DashboardLayout'
 import { Card, SectionTitle, Badge, GradientButton } from '../components/ui'
 import { useAuthStore } from '../store/authStore'
+import { privacyAPI, profileAPI } from '../services/api'
 
 const TABS = [
   { id: 'personal', label: 'Personal Info', icon: User },
@@ -20,12 +21,14 @@ const TABS = [
 ]
 
 function Field({ label, icon: Icon, value, onChange, editing, type = 'text', placeholder }) {
+  const fieldId = useId()
   return (
     <div>
-      <label className="flex items-center gap-1.5 text-xs font-semibold text-neutral-500 dark:text-neutral-400 mb-1.5 uppercase tracking-wide">
+      <label htmlFor={fieldId} className="flex items-center gap-1.5 text-xs font-semibold text-neutral-500 dark:text-neutral-400 mb-1.5 uppercase tracking-wide">
         {Icon && <Icon className="w-3.5 h-3.5" />} {label}
       </label>
       <input
+        id={fieldId}
         type={type}
         value={value}
         placeholder={placeholder}
@@ -42,12 +45,14 @@ function Field({ label, icon: Icon, value, onChange, editing, type = 'text', pla
 }
 
 function SelectField({ label, icon: Icon, value, onChange, editing, options }) {
+  const fieldId = useId()
   return (
     <div>
-      <label className="flex items-center gap-1.5 text-xs font-semibold text-neutral-500 dark:text-neutral-400 mb-1.5 uppercase tracking-wide">
+      <label htmlFor={fieldId} className="flex items-center gap-1.5 text-xs font-semibold text-neutral-500 dark:text-neutral-400 mb-1.5 uppercase tracking-wide">
         {Icon && <Icon className="w-3.5 h-3.5" />} {label}
       </label>
       <select
+        id={fieldId}
         value={value}
         disabled={!editing}
         onChange={(e) => onChange?.(e.target.value)}
@@ -70,6 +75,8 @@ export default function ProfilePage() {
   const [editing, setEditing] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
   const [confirmText, setConfirmText] = useState('')
+  const [avatar, setAvatar] = useState('')
+  const avatarInputRef = useRef(null)
 
   const name = user?.full_name || 'Priya Raman'
 
@@ -97,19 +104,63 @@ export default function ProfilePage() {
 
   const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }))
 
-  const handleSave = () => {
-    setEditing(false)
-    toast.success('Profile updated')
+  const handleSave = async () => {
+    try {
+      if (tab === 'personal') {
+        await profileAPI.updatePersonal({ full_name: form.full_name, phone: form.phone, city: form.location, dob: form.dob })
+      } else if (tab === 'child') {
+        await profileAPI.updateChild({ child_name: form.child_name, child_age: Number(form.child_age), child_gender: form.child_gender, language: form.language })
+      } else if (tab === 'medical') {
+        await profileAPI.updateMedical({ diagnosis: form.diagnosis, allergies: form.allergies, medications: form.medications, therapist_name: form.therapist })
+      } else if (tab === 'emergency') {
+        await profileAPI.addEmergency({ name: form.emName, relationship: form.emRelation, phone: form.emPhone, email: form.emEmail || null })
+      } else {
+        localStorage.setItem('speakeasy-profile-preferences', JSON.stringify({ language: form.language, theme: form.theme }))
+      }
+      setEditing(false)
+      toast.success(tab === 'preferences' ? 'Preferences saved on this device' : 'Profile updated')
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Could not save profile changes')
+    }
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (confirmText !== 'DELETE') {
       toast.error('Type DELETE to confirm')
       return
     }
-    setShowDelete(false)
-    setConfirmText('')
-    toast.success('Account deletion requested')
+    try {
+      await privacyAPI.requestDeletion('Requested from profile settings')
+      setShowDelete(false)
+      setConfirmText('')
+      toast.success('Account deletion request submitted')
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Could not submit the deletion request')
+    }
+  }
+
+  const handleAvatarChange = (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      toast.error('Choose an image file')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Profile pictures must be smaller than 2 MB')
+      return
+    }
+    const reader = new FileReader()
+    reader.onload = async () => {
+      setAvatar(String(reader.result || ''))
+      try {
+        await profileAPI.setAvatar(String(reader.result || ''))
+        toast.success('Profile picture updated')
+      } catch {
+        toast.error('Picture preview updated, but it could not be saved to your account')
+      }
+    }
+    reader.readAsDataURL(file)
   }
 
   return (
@@ -121,11 +172,22 @@ export default function ProfilePage() {
         </div>
         <div className="px-6 pb-6 -mt-12 flex flex-col sm:flex-row sm:items-end gap-4">
           <div className="relative shrink-0">
-            <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center text-white text-4xl font-bold ring-4 ring-white dark:ring-neutral-900 shadow-lg">
-              {name.charAt(0)}
+            <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center text-white text-4xl font-bold ring-4 ring-white dark:ring-neutral-900 shadow-lg overflow-hidden">
+              {avatar ? (
+                <img data-testid="profile-avatar-preview" src={avatar} alt={`${name} profile`} className="h-full w-full object-cover" />
+              ) : name.charAt(0)}
             </div>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={handleAvatarChange}
+            />
             <button
-              onClick={() => toast('Avatar upload coming soon', { icon: '📷' })}
+              type="button"
+              aria-label="Upload profile picture"
+              onClick={() => avatarInputRef.current?.click()}
               className="absolute -bottom-1 -right-1 w-9 h-9 bg-white dark:bg-neutral-800 rounded-full flex items-center justify-center shadow-md border border-neutral-100 dark:border-neutral-700 hover:scale-110 transition"
             >
               <Camera className="w-4 h-4 text-primary-600 dark:text-primary-400" />
@@ -184,17 +246,19 @@ export default function ProfilePage() {
           <Card className="p-4 mt-6">
             <SectionTitle title="Privacy & Security" icon={Shield} />
             {[
-              { icon: Lock, label: 'Change Password' },
-              { icon: KeyRound, label: 'Two-Factor Auth' },
-              { icon: Bell, label: 'Login Activity' },
+              { icon: Lock, label: 'Change Password', path: '/settings' },
+              { icon: KeyRound, label: 'Two-Factor Auth', status: 'Not configured' },
+              { icon: Bell, label: 'Login Activity', status: 'Current session protected' },
             ].map((l) => (
               <button
                 key={l.label}
-                onClick={() => toast(l.label, { icon: '🔒' })}
-                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition"
+                type="button"
+                onClick={() => l.path && navigate(l.path)}
+                disabled={!l.path}
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition disabled:cursor-default disabled:opacity-70"
               >
                 <span className="flex items-center gap-2.5"><l.icon className="w-4 h-4 text-primary-500" /> {l.label}</span>
-                <ChevronRight className="w-4 h-4 text-neutral-300" />
+                {l.path ? <ChevronRight className="w-4 h-4 text-neutral-300" /> : <span className="text-[10px] text-neutral-400">{l.status}</span>}
               </button>
             ))}
           </Card>

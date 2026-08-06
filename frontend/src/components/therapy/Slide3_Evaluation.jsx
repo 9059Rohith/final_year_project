@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import Confetti from 'react-confetti'
 import { Circle, CheckCircle2, AlertCircle, Mic, Square, Lightbulb, Volume2 } from 'lucide-react'
@@ -7,10 +7,27 @@ import { useFaceDetection } from '../../hooks/useFaceDetection'
 import { evaluationAPI } from '../../services/api'
 import { useTherapyStore } from '../../store/therapyStore'
 import toast from 'react-hot-toast'
-import MitraCompanion from '../three/MitraCompanion'
+import { repeatPhrase } from '../../utils/speechRepeat'
+import { getPippinTargetText } from '../../features/pippin/trainingPippin'
+import { convertAudioBlobToWav } from '../../utils/audioWav'
 
 const MAX_ATTEMPTS = 3
 const SUCCESS_THRESHOLD = 70
+
+function getOutcomeHeading(result, passed) {
+  if (passed) return 'Great! Pippin heard the sound clearly.'
+  switch (result?.validation_status) {
+    case 'recognizer_unavailable':
+    case 'processing_error':
+      return 'The voice checker is unavailable. Your pronunciation was not graded.'
+    case 'no_speech':
+      return 'The microphone did not hear a clear voice.'
+    case 'duration_mismatch':
+      return 'Good sound. Hold it for the shown length and try again.'
+    default:
+      return "Good try! Let's say it once more."
+  }
+}
 
 // ─────────────────────────────────────────────────
 // Live microphone waveform (real Web Audio frequency data)
@@ -98,7 +115,7 @@ function VolumeMeter({ level }) {
   )
 }
 
-export default function Slide3_Evaluation({ lesson, onNext, onPrev }) {
+export default function Slide3_Evaluation({ lesson, onNext, onPrev, onCoachStateChange }) {
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
   const [stream, setStream] = useState(null)
@@ -110,10 +127,19 @@ export default function Slide3_Evaluation({ lesson, onNext, onPrev }) {
   const [showHint, setShowHint] = useState(false)
   const [successBurst, setSuccessBurst] = useState(false)
   const [micLevel, setMicLevel] = useState(0)
+  const [isFallbackRepeating, setIsFallbackRepeating] = useState(false)
+  const fallbackRepeatTimerRef = useRef(null)
+  const repeatedBlobRef = useRef(null)
+  const evaluationInFlightRef = useRef(null)
+  const transcriptRef = useRef('')
 
   const { addSessionResult } = useTherapyStore()
-  const { isRecording, audioBlob, duration, transcript, analyserRef, startRecording, stopRecording, resetRecording } = useAudioRecorder()
+  const { isRecording, isRepeating, audioBlob, duration, transcript, analyserRef, startRecording, stopRecording, resetRecording } = useAudioRecorder()
   const { faceData, startDetection, stopDetection } = useFaceDetection(videoRef, canvasRef)
+
+  useEffect(() => {
+    transcriptRef.current = transcript
+  }, [transcript])
 
   // Start camera (video only — audio is owned by the recorder hook)
   useEffect(() => {
@@ -160,27 +186,34 @@ export default function Slide3_Evaluation({ lesson, onNext, onPrev }) {
     if (failedAttempts >= 2 && !hasSuccess) setShowHint(true)
   }, [failedAttempts, hasSuccess])
 
-  const handleRecord = async () => {
-    if (!isRecording) {
-      const success = await startRecording(lesson.language || 'en-IN')
-      if (success) toast.success('Listening… speak now!')
-    } else {
-      stopRecording()
-    }
-  }
+  useEffect(() => {
+    const passed = evaluationResult && (evaluationResult.phoneme_match || evaluationResult.accuracy >= SUCCESS_THRESHOLD)
+    onCoachStateChange?.({
+      isRecording,
+      isRepeating: isRepeating || isFallbackRepeating,
+      isAnalyzing,
+      hasRecording: Boolean(audioBlob),
+      outcome: evaluationResult ? (passed ? 'success' : 'retry') : null,
+      audioLevel: micLevel,
+    })
+  }, [audioBlob, evaluationResult, isAnalyzing, isFallbackRepeating, isRecording, isRepeating, micLevel, onCoachStateChange])
 
-  const handleSubmit = async () => {
-    if (!audioBlob) {
+  const handleSubmit = useCallback(async (recording = audioBlob) => {
+    if (!recording) {
       toast.error('No recording available')
       return
     }
+    if (evaluationInFlightRef.current === recording) return
 
+    evaluationInFlightRef.current = recording
     setIsAnalyzing(true)
     try {
+      const evaluationAudio = await convertAudioBlobToWav(recording)
       const formData = new FormData()
-      formData.append('audio', audioBlob, 'recording.webm')
+      formData.append('audio', evaluationAudio, 'recording.wav')
       formData.append('target_phoneme', lesson.phoneme)
       formData.append('lesson_id', lesson.id)
+      formData.append('browser_transcript', transcriptRef.current.trim().slice(0, 64))
 
       const response = await evaluationAPI.evaluateSpeech(formData)
       const result = response.data
@@ -194,34 +227,62 @@ export default function Slide3_Evaluation({ lesson, onNext, onPrev }) {
         setHasSuccess(true)
         setSuccessBurst(true)
         setTimeout(() => setSuccessBurst(false), 4000)
+        repeatPhrase('Very good!', { lang: 'en-IN' })
       } else {
         setFailedAttempts((f) => f + 1)
       }
     } catch (error) {
+      evaluationInFlightRef.current = null
       console.error('Evaluation error:', error)
       toast.error('Evaluation failed: ' + (error.response?.data?.detail || error.message))
     } finally {
       setIsAnalyzing(false)
     }
+  }, [addSessionResult, audioBlob, duration, lesson.id, lesson.phoneme])
+
+  useEffect(() => () => window.clearTimeout(fallbackRepeatTimerRef.current), [])
+
+  useEffect(() => {
+    if (!audioBlob || isRecording || evaluationResult || repeatedBlobRef.current === audioBlob) return
+    repeatedBlobRef.current = audioBlob
+    window.clearTimeout(fallbackRepeatTimerRef.current)
+    setIsFallbackRepeating(true)
+    let finished = false
+    const finishRepeat = () => {
+      if (finished) return
+      finished = true
+      window.clearTimeout(fallbackRepeatTimerRef.current)
+      setIsFallbackRepeating(false)
+      handleSubmit(audioBlob)
+    }
+    const repeated = repeatPhrase(getPippinTargetText(lesson), {
+      lang: 'en-IN',
+      onEnd: finishRepeat,
+      onError: finishRepeat,
+    })
+    if (repeated) fallbackRepeatTimerRef.current = window.setTimeout(finishRepeat, 4000)
+    else finishRepeat()
+  }, [audioBlob, evaluationResult, handleSubmit, isRecording, lesson])
+
+  const handleRecord = async () => {
+    if (!isRecording) {
+      const success = await startRecording(lesson.language || 'en-IN', { repeatRecognized: false })
+      if (success) toast.success('Listening… speak now!')
+    } else {
+      stopRecording()
+    }
   }
 
   const handleTryAgain = () => {
     setEvaluationResult(null)
+    repeatedBlobRef.current = null
+    evaluationInFlightRef.current = null
     resetRecording()
-  }
-
-  const getEmotionEmoji = (emotion) => {
-    switch (emotion) {
-      case 'stressed': return '😰'
-      case 'focused': return '🤔'
-      case 'engaged': return '😊'
-      case 'calm': return '😌'
-      default: return '😐'
-    }
   }
 
   const canProceed = hasSuccess || attempts >= MAX_ATTEMPTS
   const lastPassed = evaluationResult && (evaluationResult.phoneme_match || evaluationResult.accuracy >= SUCCESS_THRESHOLD)
+  const outcomeHeading = getOutcomeHeading(evaluationResult, lastPassed)
 
   return (
     <div className="h-full flex items-center justify-center p-6 md:p-8 relative">
@@ -264,10 +325,6 @@ export default function Slide3_Evaluation({ lesson, onNext, onPrev }) {
                 <Circle className={`w-3 h-3 ${faceData.faceDetected ? 'fill-green-500 text-green-500' : 'fill-red-500 text-red-500'}`} />
                 <span className="text-sm">{faceData.faceDetected ? 'Face Detected' : 'No Face'}</span>
               </div>
-              <div className="absolute top-4 right-4 bg-black/60 backdrop-blur px-3 py-2 rounded-full text-white text-2xl">
-                {getEmotionEmoji(faceData.emotion)}
-              </div>
-
               {/* Real-time waveform overlay */}
               <div className="absolute bottom-3 left-3 right-3 bg-black/55 backdrop-blur rounded-xl px-3 py-2">
                 <LiveWaveform analyserRef={analyserRef} active={isRecording} />
@@ -304,9 +361,13 @@ export default function Slide3_Evaluation({ lesson, onNext, onPrev }) {
               </div>
               <p className="text-sm font-semibold text-center min-h-[20px]">
                 {isRecording ? (
-                  <span className="text-coral-600 animate-pulse">🎤 Listening… say &quot;{lesson.english}&quot;</span>
+                  <span className="text-coral-600 animate-pulse">🎤 Listening… say &quot;{getPippinTargetText(lesson)}&quot;</span>
+                ) : isFallbackRepeating ? (
+                  <span className="text-secondary-700">Pippin is repeating your sound...</span>
+                ) : isAnalyzing ? (
+                  <span className="text-primary">Pippin is checking your sound...</span>
                 ) : audioBlob && !evaluationResult ? (
-                  <span className="text-accent-600">Recording ready — tap Evaluate!</span>
+                  <span className="text-accent-600">Recording ready for evaluation</span>
                 ) : (
                   <span className="text-neutral-500">Tap the mic and say the word</span>
                 )}
@@ -321,9 +382,9 @@ export default function Slide3_Evaluation({ lesson, onNext, onPrev }) {
             {/* Evaluate / Try again */}
             <div className="flex gap-3">
               {!evaluationResult ? (
-                audioBlob && !isRecording && (
+                audioBlob && !isRecording && !isFallbackRepeating && (
                   <button
-                    onClick={handleSubmit}
+                    onClick={() => handleSubmit()}
                     disabled={isAnalyzing}
                     className="flex-1 bg-accent-500 hover:bg-accent-600 text-white py-3 rounded-xl font-semibold transition disabled:opacity-50"
                   >
@@ -401,10 +462,14 @@ export default function Slide3_Evaluation({ lesson, onNext, onPrev }) {
                   )}
                   <div>
                     <p className={`font-bold text-lg ${lastPassed ? 'text-accent-700' : 'text-amber-700'}`}>
-                      {lastPassed ? 'Amazing! Perfect pronunciation! ⭐' : "Great try! Let's try once more 💪"}
+                      {outcomeHeading}
                     </p>
                     <p className="text-sm text-neutral-600">
-                      You said: <span className="font-semibold">{evaluationResult.transcription ? `"${evaluationResult.transcription}"` : 'no speech detected'}</span>
+                      {evaluationResult.transcription ? (
+                        <span className="font-semibold">"{evaluationResult.transcription}"</span>
+                      ) : (
+                        <span className="font-semibold">no speech detected</span>
+                      )}
                     </p>
                   </div>
                 </motion.div>
@@ -509,23 +574,6 @@ export default function Slide3_Evaluation({ lesson, onNext, onPrev }) {
             )}
           </motion.div>
         </div>
-
-      {/* MITRA Companion — fixed bottom-right, reacts to score + recording */}
-      <motion.div
-        initial={{ opacity: 0, x: 80 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: 0.6, type: 'spring', stiffness: 200 }}
-        className="fixed bottom-6 right-6 z-40 pointer-events-none"
-      >
-        <MitraCompanion
-          slide={3}
-          score={evaluationResult ? Math.round(evaluationResult.accuracy || 0) : null}
-          audioLevel={micLevel}
-          isRecording={isRecording}
-          compact
-        />
-      </motion.div>
-
         {/* Navigation */}
         <div className="flex justify-between mt-7">
           <button

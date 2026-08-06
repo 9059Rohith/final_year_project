@@ -39,6 +39,12 @@ describe('interaction preferences', () => {
     expect(migrated).not.toHaveProperty('secret')
   })
 
+  it('persists only allow-listed Pippin voices and defaults invalid values to kitten', () => {
+    expect(migrateInteractionPreferences({ pippinVoice: 'gentle' }).pippinVoice).toBe('gentle')
+    expect(migrateInteractionPreferences({ pippinVoice: 'celebrity-clone' }).pippinVoice).toBe('kitten')
+    expect(DEFAULT_INTERACTION_PREFERENCES.pippinVoice).toBe('kitten')
+  })
+
   it('uses age and reduced-motion system preference when no saved value exists', () => {
     expect(resolveInitialPreferences({ age: 5, prefersReducedMotion: true })).toMatchObject({
       ageBand: 'early',
@@ -68,4 +74,3 @@ describe('interaction preferences', () => {
     })
   })
 })
-

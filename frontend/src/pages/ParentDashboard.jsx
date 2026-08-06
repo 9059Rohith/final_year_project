@@ -15,6 +15,8 @@ import DashboardLayout from '../components/layout/DashboardLayout'
 import { Card, StatCard, SectionTitle, ProgressRing, Badge, GradientButton } from '../components/ui'
 import { useAuthStore } from '../store/authStore'
 import { progressAPI, parentAPI } from '../services/api'
+import InteractivePracticeSummary from '../components/parent/InteractivePracticeSummary'
+import '../components/parent/parent-practice.css'
 
 /* ---------------------------------- mock data ---------------------------------- */
 const CHILD = {
@@ -181,6 +183,24 @@ export default function ParentDashboard() {
     if (g) toast.success(g.done ? 'Goal reopened' : `Goal completed — well done! 🎉`)
   }
 
+  const downloadInvoices = () => {
+    const escapeCsv = (value) => `"${String(value).replaceAll('"', '""')}"`
+    const rows = [
+      ['Date', 'Plan', 'Amount', 'Status'],
+      ...PAYMENTS.map((payment) => [payment.date, payment.plan, payment.amount, payment.status]),
+    ]
+    const csv = rows.map((row) => row.map(escapeCsv).join(',')).join('\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'speakeasy-invoices.csv'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+    toast.success('Invoice history downloaded')
+  }
+
   return (
     <DashboardLayout
       title="Parent Dashboard"
@@ -234,6 +254,8 @@ export default function ParentDashboard() {
           <p className="text-sm text-primary-800 dark:text-primary-200">{weekly.recommendation}</p>
         </motion.div>
       )}
+
+      <InteractivePracticeSummary />
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -438,7 +460,7 @@ export default function ParentDashboard() {
           </table>
         </div>
         <div className="mt-5 flex justify-end">
-          <GradientButton onClick={() => toast.success('Invoice download started')}>
+          <GradientButton onClick={downloadInvoices}>
             <CreditCard className="w-4 h-4" /> Download Invoices
           </GradientButton>
         </div>

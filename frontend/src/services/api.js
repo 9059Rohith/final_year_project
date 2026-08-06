@@ -1,39 +1,19 @@
 import axios from 'axios'
+import { useAuthStore } from '../store/authStore'
+import { resolveApiBaseUrl } from './apiConfig'
+
+const apiBaseUrl = resolveApiBaseUrl({
+  isDevelopment: import.meta.env.DEV,
+  configuredUrl: import.meta.env.VITE_API_BASE_URL,
+})
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: apiBaseUrl,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 })
-
-// Add request interceptor to include JWT token
-api.interceptors.request.use(
-  (config) => {
-    // Get token from localStorage (zustand persist stores it there)
-    const authStorage = localStorage.getItem('auth-storage')
-    if (authStorage) {
-      try {
-        const { state } = JSON.parse(authStorage)
-        if (state?.token) {
-          config.headers.Authorization = `Bearer ${state.token}`
-          console.log('🔑 Token attached to request:', config.url)
-        } else {
-          console.warn('⚠️ No token found in auth storage for request:', config.url)
-        }
-      } catch (error) {
-        console.error('❌ Failed to parse auth storage:', error)
-      }
-    } else {
-      console.warn('⚠️ No auth storage found for request:', config.url)
-    }
-    return config
-  },
-  (error) => {
-    return Promise.reject(error)
-  }
-)
 
 // Add response interceptor to handle 401 errors
 api.interceptors.response.use(
@@ -42,12 +22,10 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       // Don't redirect if already on login/register/landing pages
       const currentPath = window.location.pathname
-      const publicPaths = ['/', '/login', '/register', '/admin-login']
+      const publicPaths = ['/', '/login', '/register', '/admin-login', '/forgot-password', '/verify-otp']
       
       if (!publicPaths.includes(currentPath)) {
-        console.error('❌ 401 Unauthorized - clearing auth')
-        // Clear auth storage without full page reload
-        localStorage.removeItem('auth-storage')
+        useAuthStore.getState().logout()
         // Use soft navigation instead of hard reload to prevent blink
         window.location.replace('/login')
       }
@@ -90,6 +68,13 @@ export const evaluationAPI = {
       },
     })
   },
+  evaluateTamilStory: (formData) => api.post('/evaluate/tamil-story', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
+}
+
+export const storyVoiceAPI = {
+  get: (lineId) => api.get(`/story-voice/${encodeURIComponent(lineId)}`, { responseType: 'blob' }),
 }
 
 // Progress endpoints
@@ -472,6 +457,12 @@ export const activityAPI = {
   mine: (limit = 20) => api.get('/activity', { params: { limit } }),
   forUser: (userId, limit = 20) => api.get(`/activity/${userId}`, { params: { limit } }),
   today: () => api.get('/activity/summary/today'),
+}
+
+// Privacy-minimal aggregate reporting for child Play & Practice sessions.
+export const interactiveSessionsAPI = {
+  create: (data) => api.post('/interactive-sessions', data),
+  summary: () => api.get('/interactive-sessions/summary'),
 }
 
 // Moderation

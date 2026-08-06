@@ -297,7 +297,10 @@ export default function ReportsPage() {
     return base
   }, [activeTab, summary, analysis])
 
-  const handleDownload = () => toast.success('📄 Generating PDF report…')
+  const handleDownload = () => {
+    toast('Choose “Save as PDF” in the browser print dialog.', { icon: '📄' })
+    setTimeout(() => window.print?.(), 100)
+  }
   const handlePrint = () => {
     toast('🖨️ Preparing print view…', { icon: '🖨️' })
     setTimeout(() => window.print?.(), 400)
@@ -309,7 +312,7 @@ export default function ReportsPage() {
         onClick={handleDownload}
         className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white/15 hover:bg-white/25 backdrop-blur text-white text-sm font-semibold transition"
       >
-        <Download className="w-4 h-4" /> Download PDF
+        <Download className="w-4 h-4" /> Save as PDF
       </button>
       <button
         onClick={handlePrint}

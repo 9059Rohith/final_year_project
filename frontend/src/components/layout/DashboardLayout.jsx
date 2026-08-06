@@ -19,6 +19,7 @@ export const NAV_GROUPS = [
     items: [
       { icon: Home, label: 'Dashboard', path: '/dashboard' },
       { icon: GraduationCap, label: 'Training', path: '/training' },
+      { icon: Sparkles, label: 'Play & Practice', path: '/play' },
       { icon: ClipboardCheck, label: 'Assessment', path: '/assessment' },
     ],
   },
@@ -118,7 +119,7 @@ function SidebarContent({ onNavigate, onClose }) {
             <div className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-wider text-neutral-400 dark:text-neutral-600">{group.title}</div>
             <div className="space-y-0.5">
               {group.items.map((link) => {
-                const active = location.pathname === link.path
+                const active = location.pathname === link.path || (link.path === '/play' && location.pathname.startsWith('/play/'))
                 return (
                   <button
                     key={link.path}

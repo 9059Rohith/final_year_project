@@ -17,6 +17,17 @@ describe('Talk Together caregiver missions', () => {
     }
   })
 
+  it('maps the five approved missions to distinct environments and Tamil praise', () => {
+    expect(TALK_TOGETHER_MISSIONS.map(({ id, environment }) => [id, environment])).toEqual([
+      ['ask-water', 'kitchen'],
+      ['choose-snack', 'grocery'],
+      ['name-object', 'classroom'],
+      ['imitate-turns', 'park'],
+      ['say-thanks', 'birthday'],
+    ])
+    for (const mission of TALK_TOGETHER_MISSIONS) expect(mission.celebrateTa).toMatch(/[\u0B80-\u0BFF]/)
+  })
+
   it('summarizes every assistance level', () => {
     const events = ASSISTANCE_LEVELS.map((assistance) => ({ assistance }))
     expect(summarizeAssistance(events)).toEqual({ independent: 1, verbal_prompt: 1, visual_prompt: 1, modelled: 1, skipped: 1 })

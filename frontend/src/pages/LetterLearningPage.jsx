@@ -8,6 +8,7 @@ import DashboardLayout from '../components/layout/DashboardLayout'
 import { Card, SectionTitle, Badge, GradientButton } from '../components/ui'
 import { useAuthStore } from '../store/authStore'
 import toast from 'react-hot-toast'
+import { repeatPhrase } from '../utils/speechRepeat'
 
 const LETTERS = [
   { tamil: 'அ', english: 'A',  word: 'அம்மா',   wordEn: 'Amma (Mother)',   sentence: 'அம்மா எனக்கு உணவு தருகிறார்.',  tip: 'Open your mouth wide and let the sound flow from your throat — like a relaxed "ah".' },
@@ -32,7 +33,7 @@ export default function LetterLearningPage() {
     setDirection(next > index ? 1 : -1)
     setIndex((next + LETTERS.length) % LETTERS.length)
   }
-  const playSound = () => toast('🔊 Playing pronunciation', { icon: '🎵' })
+  const playSound = () => repeatPhrase(current.tamil, { lang: 'ta-IN' })
   const random = () => {
     let r = index
     while (r === index) r = Math.floor(Math.random() * LETTERS.length)
